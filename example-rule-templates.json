@@ -1,0 +1,204 @@
+[
+  {
+    "rule_code": "RATE_LIMIT_MISSING",
+    "name": "Missing Rate Limit Handling",
+    "description": "Code makes Meta API calls without implementing rate limit error handling. This can lead to app suspension if requests are throttled.",
+    "platform": "all",
+    "severity": "error",
+    "category": "rate-limiting",
+    "detection": {
+      "type": "ast-pattern",
+      "astQuery": "(call_expression function: (member_expression) @fn) @call",
+      "fileTypes": [".js", ".ts"]
+    },
+    "recommendation": "Implement exponential backoff when receiving rate limit errors (HTTP 429 or error code 4). Respect the x-app-usage and x-business-use-case-usage headers.",
+    "fix_example": "try {\n  const response = await fb.api('/me');\n} catch (error) {\n  if (error.code === 4 || error.statusCode === 429) {\n    // Wait and retry with exponential backoff\n    await sleep(Math.pow(2, retryCount) * 1000);\n  }\n}",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/graph-api/overview/rate-limiting/"
+    ],
+    "tags": ["rate-limiting", "best-practice", "critical"],
+    "enabled": true
+  },
+  {
+    "rule_code": "HUMAN_AGENT_ABUSE",
+    "name": "HUMAN_AGENT Tag Misuse",
+    "description": "HUMAN_AGENT message tag used outside 7-day window or for automated responses. This violates Messenger Platform policy.",
+    "platform": "messenger",
+    "severity": "error",
+    "category": "messaging",
+    "detection": {
+      "type": "regex",
+      "pattern": "messaging_type.*HUMAN_AGENT|HUMAN_AGENT.*true",
+      "fileTypes": [".js", ".ts", ".py"]
+    },
+    "recommendation": "Only use HUMAN_AGENT tag within 7 days of user message and for actual human agent responses, not automated messages.",
+    "fix_example": "// Check if within 7-day window\nconst daysSinceLastMessage = (Date.now() - lastUserMessage) / (1000 * 60 * 60 * 24);\nif (daysSinceLastMessage <= 7 && isHumanResponse) {\n  await sendMessage({ messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT' });\n}",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/messenger-platform/send-messages/message-tags"
+    ],
+    "tags": ["messenger", "policy-violation", "critical"],
+    "enabled": true
+  },
+  {
+    "rule_code": "UNOFFICIAL_IG_LIBRARY",
+    "name": "Unofficial Instagram Library Detected",
+    "description": "Using unofficial Instagram libraries that violate Meta Platform Terms. These libraries use web scraping or unofficial APIs.",
+    "platform": "instagram",
+    "severity": "error",
+    "category": "policy-violation",
+    "detection": {
+      "type": "sdk-check",
+      "pattern": "instagram-private-api|instagram-web-api|instagrapi|instagram-scraper",
+      "fileTypes": [".js", ".ts", ".py"]
+    },
+    "recommendation": "Replace with official Instagram Graph API accessed via facebook-nodejs-business-sdk or official Meta SDKs.",
+    "fix_example": "// WRONG:\nimport { IgApiClient } from 'instagram-private-api';\n\n// CORRECT:\nimport { FacebookAdsApi, IGUser } from 'facebook-nodejs-business-sdk';\nconst api = FacebookAdsApi.init(accessToken);\nconst igUser = new IGUser(igUserId);",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/instagram-api/",
+      "https://developers.facebook.com/terms/"
+    ],
+    "tags": ["instagram", "policy-violation", "security"],
+    "enabled": true
+  },
+  {
+    "rule_code": "TOKEN_EXPOSED",
+    "name": "Access Token Hardcoded in Source Code",
+    "description": "Access tokens or app secrets found hardcoded in source files. This is a critical security vulnerability.",
+    "platform": "all",
+    "severity": "error",
+    "category": "security",
+    "detection": {
+      "type": "regex",
+      "pattern": "(EAAA|access_token=|app_secret=)[A-Za-z0-9_-]{50,}",
+      "fileTypes": [".js", ".ts", ".py", ".php", ".java"]
+    },
+    "recommendation": "Store tokens in environment variables or secure secret management systems (AWS Secrets Manager, HashiCorp Vault, etc.). Never commit tokens to version control.",
+    "fix_example": "// WRONG:\nconst accessToken = 'EAABsbCS1iHgBO7qKZC...';\n\n// CORRECT:\nconst accessToken = process.env.FB_ACCESS_TOKEN;\n\n// Or use dotenv:\nrequire('dotenv').config();\nconst accessToken = process.env.FB_ACCESS_TOKEN;",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/facebook-login/security/#appsecret"
+    ],
+    "tags": ["security", "critical", "credentials"],
+    "enabled": true
+  },
+  {
+    "rule_code": "DEPRECATED_API_VERSION",
+    "name": "Using Deprecated Graph API Version",
+    "description": "Code uses Graph API version older than v10.0, which is deprecated and will be sunset.",
+    "platform": "all",
+    "severity": "warning",
+    "category": "deprecation",
+    "detection": {
+      "type": "regex",
+      "pattern": "graph\\.facebook\\.com/v[1-9]\\.",
+      "fileTypes": [".js", ".ts", ".py", ".php"]
+    },
+    "recommendation": "Upgrade to the latest stable API version (v18.0 or later). Test thoroughly as API behavior may have changed.",
+    "fix_example": "// WRONG:\nconst url = 'https://graph.facebook.com/v9.0/me';\n\n// CORRECT:\nconst url = 'https://graph.facebook.com/v18.0/me';",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/graph-api/changelog",
+      "https://developers.facebook.com/docs/graph-api/guides/versioning"
+    ],
+    "tags": ["deprecation", "api-version"],
+    "enabled": true
+  },
+  {
+    "rule_code": "NO_ERROR_HANDLING",
+    "name": "API Calls Without Error Handling",
+    "description": "API calls made without proper try-catch blocks or error handling. This can cause application crashes.",
+    "platform": "all",
+    "severity": "warning",
+    "category": "error-handling",
+    "detection": {
+      "type": "ast-pattern",
+      "astQuery": "(call_expression) @call",
+      "fileTypes": [".js", ".ts"]
+    },
+    "recommendation": "Wrap all API calls in try-catch blocks. Handle common error cases: network failures, rate limits, invalid tokens, permission errors.",
+    "fix_example": "try {\n  const response = await fb.api('/me', { fields: 'id,name' });\n  console.log(response);\n} catch (error) {\n  if (error.code === 190) {\n    // Invalid token - re-authenticate\n  } else if (error.code === 4) {\n    // Rate limit - retry with backoff\n  } else {\n    // Log and handle gracefully\n    console.error('API error:', error);\n  }\n}",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/graph-api/using-graph-api/error-handling"
+    ],
+    "tags": ["error-handling", "best-practice"],
+    "enabled": true
+  },
+  {
+    "rule_code": "DATA_RETENTION_VIOLATION",
+    "name": "User Data Stored Beyond Policy Limits",
+    "description": "User data appears to be stored longer than Meta Platform Policy allows (typically 90 days without active use).",
+    "platform": "all",
+    "severity": "warning",
+    "category": "data-storage",
+    "detection": {
+      "type": "semantic",
+      "semanticHint": "database schema, data retention, user data storage, 90 days",
+      "fileTypes": [".sql", ".js", ".ts", ".py"]
+    },
+    "recommendation": "Implement automatic data deletion after 90 days of inactivity or when user deletes account. Provide data deletion callback endpoint.",
+    "fix_example": "// Implement data deletion callback\napp.post('/data-deletion', (req, res) => {\n  const { user_id } = req.body;\n  // Delete all user data from your database\n  await deleteUserData(user_id);\n  res.json({ success: true });\n});\n\n// Scheduled cleanup of old data\ncron.schedule('0 0 * * *', async () => {\n  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);\n  await db.deleteWhere('last_active < ?', ninetyDaysAgo);\n});",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/development/release/data-deletion"
+    ],
+    "tags": ["data-privacy", "compliance", "gdpr"],
+    "enabled": true
+  },
+  {
+    "rule_code": "MISSING_PERMISSION_CHECK",
+    "name": "API Call Without Permission Verification",
+    "description": "Code makes API calls without first checking if user granted required permissions.",
+    "platform": "all",
+    "severity": "info",
+    "category": "permissions",
+    "detection": {
+      "type": "semantic",
+      "semanticHint": "permission check, scope verification, granted permissions",
+      "fileTypes": [".js", ".ts", ".py"]
+    },
+    "recommendation": "Before making API calls, verify the user has granted necessary permissions. Handle missing permissions gracefully.",
+    "fix_example": "// Check granted permissions first\nconst { data } = await fb.api('/me/permissions');\nconst hasEmailPerm = data.some(p => p.permission === 'email' && p.status === 'granted');\n\nif (hasEmailPerm) {\n  const user = await fb.api('/me', { fields: 'email' });\n} else {\n  // Request permission or show error\n}",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/permissions/overview"
+    ],
+    "tags": ["permissions", "user-experience"],
+    "enabled": true
+  },
+  {
+    "rule_code": "WEBHOOK_NO_VERIFICATION",
+    "name": "Webhook Without Signature Verification",
+    "description": "Webhook endpoint does not verify x-hub-signature header. This is a security vulnerability.",
+    "platform": "all",
+    "severity": "error",
+    "category": "security",
+    "detection": {
+      "type": "semantic",
+      "semanticHint": "webhook, x-hub-signature, signature verification",
+      "fileTypes": [".js", ".ts", ".py"]
+    },
+    "recommendation": "Always verify webhook signatures using your app secret to ensure requests come from Meta.",
+    "fix_example": "import crypto from 'crypto';\n\nfunction verifyWebhook(req) {\n  const signature = req.headers['x-hub-signature-256'];\n  const hmac = crypto.createHmac('sha256', process.env.APP_SECRET);\n  const digest = 'sha256=' + hmac.update(req.rawBody).digest('hex');\n  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));\n}\n\napp.post('/webhook', (req, res) => {\n  if (!verifyWebhook(req)) {\n    return res.status(403).send('Invalid signature');\n  }\n  // Process webhook...\n});",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verification-requests"
+    ],
+    "tags": ["security", "webhooks", "critical"],
+    "enabled": true
+  },
+  {
+    "rule_code": "BATCH_REQUEST_MISUSE",
+    "name": "Inefficient API Usage - Missing Batch Requests",
+    "description": "Multiple individual API calls that could be combined into a single batch request for better performance and rate limit efficiency.",
+    "platform": "all",
+    "severity": "info",
+    "category": "performance",
+    "detection": {
+      "type": "ast-pattern",
+      "astQuery": "(call_expression) @call",
+      "fileTypes": [".js", ".ts"]
+    },
+    "recommendation": "Use batch requests to combine up to 50 API calls into a single HTTP request. This reduces latency and counts as a single call for rate limiting.",
+    "fix_example": "// WRONG: Multiple individual calls\nconst user = await fb.api('/me');\nconst friends = await fb.api('/me/friends');\nconst posts = await fb.api('/me/posts');\n\n// CORRECT: Batch request\nconst batch = [\n  { method: 'GET', relative_url: 'me' },\n  { method: 'GET', relative_url: 'me/friends' },\n  { method: 'GET', relative_url: 'me/posts' },\n];\nconst results = await fb.api('/', 'POST', { batch: JSON.stringify(batch) });",
+    "doc_urls": [
+      "https://developers.facebook.com/docs/graph-api/making-multiple-requests"
+    ],
+    "tags": ["performance", "optimization", "best-practice"],
+    "enabled": true
+  }
+]

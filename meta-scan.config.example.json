@@ -1,0 +1,109 @@
+{
+  "// Project Configuration": "Copy to .meta-scan.config.json",
+
+  "project": {
+    "name": "My Project",
+    "description": "Project using Meta APIs"
+  },
+
+  "scanning": {
+    "// Platforms to scan for": "facebook, instagram, messenger, whatsapp, ads, or all",
+    "platforms": ["facebook", "instagram"],
+
+    "// File patterns to include": "",
+    "include": [
+      "**/*.js",
+      "**/*.ts",
+      "**/*.jsx",
+      "**/*.tsx",
+      "**/*.py"
+    ],
+
+    "// File patterns to exclude": "",
+    "ignore": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/*.test.js",
+      "**/*.spec.ts",
+      "**/coverage/**",
+      "**/.git/**"
+    ],
+
+    "// Severity threshold": "error, warning, or info",
+    "severity": "warning",
+
+    "// Include SDK usage analysis": "",
+    "includeSdkAnalysis": true,
+
+    "// Max file size to scan (bytes)": "",
+    "maxFileSize": 1048576
+  },
+
+  "rules": {
+    "// Enable/disable specific rules": "",
+    "disabled": [
+      "MISSING_PERMISSION_CHECK",
+      "BATCH_REQUEST_MISUSE"
+    ],
+
+    "// Override rule severities": "",
+    "overrides": {
+      "RATE_LIMIT_MISSING": "error",
+      "DEPRECATED_API_VERSION": "warning"
+    }
+  },
+
+  "github": {
+    "// Default branch to scan": "",
+    "defaultBranch": "main",
+
+    "// Clone depth": "",
+    "depth": 1,
+
+    "// Include submodules": "",
+    "includeSubmodules": false
+  },
+
+  "reporting": {
+    "// Output format": "console, json, or html",
+    "format": "console",
+
+    "// Output file path (for json/html)": "",
+    "outputFile": "./meta-scan-results.json",
+
+    "// Group violations by": "file, rule, or severity",
+    "groupBy": "severity",
+
+    "// Show code snippets in report": "",
+    "showSnippets": true,
+
+    "// Show recommendations": "",
+    "showRecommendations": true
+  },
+
+  "notifications": {
+    "// Webhook URL for scan completion": "",
+    "webhookUrl": null,
+
+    "// Fail CI/CD on errors": "",
+    "failOnErrors": true,
+
+    "// Fail CI/CD on warnings": "",
+    "failOnWarnings": false
+  },
+
+  "advanced": {
+    "// Enable semantic search (requires embeddings)": "",
+    "useSemanticSearch": true,
+
+    "// Semantic search confidence threshold": "",
+    "semanticThreshold": 0.75,
+
+    "// AST parsing timeout (ms)": "",
+    "astTimeout": 5000,
+
+    "// Concurrent file processing": "",
+    "concurrency": 4
+  }
+}

@@ -100,10 +100,11 @@ export class AIScanner {
     const suspiciousSections = this.findSuspiciousSections(content, lines);
 
     if (suspiciousSections.length === 0) {
+      // No suspicious patterns found - this is normal for most files
       return violations;
     }
 
-    this.log(`  🤖 Found ${suspiciousSections.length} suspicious sections (${suspiciousSections.map(s => s.category).join(', ')})`);
+    this.log(`  🤖 AI: ${suspiciousSections.length} suspicious sections in ${filePath.split('/').pop()}`);
 
     // Limit analysis to prevent excessive API calls
     const sectionsToAnalyze = suspiciousSections.slice(0, maxAnalysis);
@@ -251,8 +252,8 @@ export class AIScanner {
       // Search Supabase for similar policy chunks
       const { data, error } = await this.supabase.rpc('search_policy_chunks', {
         query_embedding: embedding,
-        match_threshold: 0.3,
-        match_count: 3,
+        match_threshold: 0.2, // Lower threshold to find more potential matches
+        match_count: 5,
       });
 
       if (error) {

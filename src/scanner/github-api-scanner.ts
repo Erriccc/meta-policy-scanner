@@ -191,21 +191,52 @@ export class GitHubApiScanner {
       }
     }
 
-    // Scan each file (rate-limit aware)
+    // First pass: collect all file contents for codebase indexing
+    this.log(`Fetching file contents...`);
     for (const file of files) {
+      if (fileContents.length >= (options.maxFiles || MAX_FILES)) break;
+      if (!this.isScannable(file)) continue;
+
+      try {
+        await this.checkRateLimit();
+        const content = await this.fetchFileContent(file.download_url!);
+        fileContents.push({ path: file.path, content });
+      } catch (e) {
+        // Skip files that fail to fetch
+      }
+    }
+
+    // Create codebase index BEFORE AI analysis (so AI has full context)
+    let codebaseIndex: CodebaseIndexer | undefined;
+    if (fileContents.length > 0) {
+      try {
+        codebaseIndex = await createCodebaseIndex(fileContents);
+        const structure = codebaseIndex.getStructure();
+        if (structure) {
+          this.log(`📊 Codebase: ${structure.summary}`);
+        }
+        // Set codebase index on AI scanner BEFORE analysis
+        if (this.aiScanner && codebaseIndex) {
+          this.aiScanner.setCodebaseIndex(codebaseIndex);
+        }
+      } catch (e) {
+        this.log(`⚠️ Codebase indexing failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      }
+    }
+
+    // Second pass: analyze files with full codebase context
+    this.log(`\nAnalyzing ${fileContents.length} files...`);
+    for (const { path: filePath, content } of fileContents) {
       if (this.filesScanned >= (options.maxFiles || MAX_FILES)) {
         this.log(`Reached max files limit (${options.maxFiles || MAX_FILES})`);
         break;
       }
 
-      if (!this.isScannable(file)) continue;
+      this.filesScanned++;
+      const file = files.find(f => f.path === filePath);
+      if (!file) continue;
 
       try {
-        await this.checkRateLimit();
-
-        const content = await this.fetchFileContent(file.download_url!);
-        fileContents.push({ path: file.path, content });
-        this.filesScanned++;
 
         // SDK Detection
         const sdkDetections = await sdkDetector.detectInFile(file.path, content);
@@ -265,25 +296,6 @@ export class GitHubApiScanner {
           break;
         }
       }
-    }
-
-    // Create codebase index from collected file contents
-    let codebaseIndex: CodebaseIndexer | undefined;
-    if (fileContents.length > 0) {
-      try {
-        codebaseIndex = await createCodebaseIndex(fileContents);
-        const structure = codebaseIndex.getStructure();
-        if (structure) {
-          this.log(`📊 Codebase: ${structure.summary}`);
-        }
-      } catch (e) {
-        this.log(`⚠️ Codebase indexing failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
-      }
-    }
-
-    // Set codebase index on AI scanner if available
-    if (this.aiScanner && codebaseIndex) {
-      this.aiScanner.setCodebaseIndex(codebaseIndex);
     }
 
     // Deduplicate violations

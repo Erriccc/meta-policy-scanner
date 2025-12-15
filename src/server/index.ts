@@ -33,6 +33,7 @@ const SERVER_CONFIG = {
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseKey: process.env.SUPABASE_ANON_KEY,
   voyageKey: process.env.VOYAGE_API_KEY,
+  anthropicKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
   groqKey: process.env.GROQ_API_KEY,
   openaiKey: process.env.OPENAI_API_KEY,
   githubPat: process.env.GITHUB_PAT, // Server's default PAT for public repos
@@ -59,16 +60,26 @@ interface IngestRequest {
  * Check what capabilities the server has
  */
 function getServerStatus() {
+  // Determine LLM provider (priority: Claude > Groq > OpenAI)
+  let llmProvider: string | null = null;
+  if (SERVER_CONFIG.anthropicKey) {
+    llmProvider = 'claude';
+  } else if (SERVER_CONFIG.groqKey) {
+    llmProvider = 'groq';
+  } else if (SERVER_CONFIG.openaiKey) {
+    llmProvider = 'openai';
+  }
+
   return {
-    version: '1.1.0',
+    version: '1.3.0',
     capabilities: {
       basicScan: true,
       githubApi: !!SERVER_CONFIG.githubPat,
       aiDetection: !!(SERVER_CONFIG.supabaseUrl && SERVER_CONFIG.voyageKey),
-      llmAnalysis: !!(SERVER_CONFIG.groqKey || SERVER_CONFIG.openaiKey),
+      llmAnalysis: !!llmProvider,
       docsIngestion: !!(SERVER_CONFIG.supabaseUrl && SERVER_CONFIG.voyageKey),
     },
-    llmProvider: SERVER_CONFIG.groqKey ? 'groq' : SERVER_CONFIG.openaiKey ? 'openai' : null,
+    llmProvider,
   };
 }
 
@@ -459,7 +470,7 @@ function startServer(port: number, maxAttempts: number = 10): void {
     console.log(`    Basic Scan:    ✓`);
     console.log(`    GitHub API:    ${status.capabilities.githubApi ? '✓' : '✗ (set GITHUB_PAT)'}`);
     console.log(`    AI Detection:  ${status.capabilities.aiDetection ? '✓' : '✗ (set SUPABASE_URL, VOYAGE_API_KEY)'}`);
-    console.log(`    LLM Analysis:  ${status.capabilities.llmAnalysis ? `✓ (${status.llmProvider})` : '✗ (set GROQ_API_KEY or OPENAI_API_KEY)'}`);
+    console.log(`    LLM Analysis:  ${status.capabilities.llmAnalysis ? `✓ (${status.llmProvider})` : '✗ (set ANTHROPIC_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY)'}`);
     console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
   });
 

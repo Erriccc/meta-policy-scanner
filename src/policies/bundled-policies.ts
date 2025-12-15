@@ -166,32 +166,22 @@ export const BUNDLED_RULES: BundledRule[] = [
   },
 
   // === RATE LIMITING ===
-  {
-    code: 'NO_RATE_LIMIT_HANDLING',
-    name: 'Missing Rate Limit Handling',
-    platform: 'all',
-    severity: 'warning',
-    category: 'Best Practice',
-    description: 'API calls without rate limit error handling detected.',
-    detection: {
-      type: 'regex',
-      pattern: 'graph\\.facebook\\.com(?!.*(?:rate|limit|429|retry|backoff))',
-    },
-    recommendation: 'Implement exponential backoff for 429 responses. Check x-business-use-case-usage header.',
-    docUrl: 'https://developers.facebook.com/docs/graph-api/overview/rate-limiting/',
-  },
+  // Note: Rate limit handling is better checked via codebase analysis (AI scanner)
+  // since it requires understanding the surrounding error handling context.
+  // Removed overly broad regex pattern that caused false positives.
 
   // === WEBHOOK SECURITY ===
   {
     code: 'WEBHOOK_NO_VERIFICATION',
     name: 'Webhook Without Signature Verification',
     platform: 'all',
-    severity: 'error',
+    severity: 'warning',
     category: 'Security',
-    description: 'Webhook endpoint does not verify x-hub-signature header. This allows attackers to send fake webhook events.',
+    description: 'Webhook endpoint should verify x-hub-signature header to prevent spoofed events.',
     detection: {
       type: 'regex',
-      pattern: 'webhook',
+      // Only match webhook handlers that process POST body without signature check
+      pattern: '(app\\.(post|use).*webhook|webhook.*handler|handleWebhook)(?!.*x-hub-signature)',
     },
     recommendation: 'Always verify webhook signatures using your app secret. Check x-hub-signature-256 header.',
     docUrl: 'https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verification-requests',
@@ -207,7 +197,8 @@ export const BUNDLED_RULES: BundledRule[] = [
     description: 'Potential storage of access tokens in database without encryption.',
     detection: {
       type: 'regex',
-      pattern: '(INSERT|UPDATE|save|store|persist).*access_token',
+      // Match database operations that store tokens - be specific to avoid matching comments/docs
+      pattern: '(INSERT\\s+INTO|UPDATE\\s+\\w+\\s+SET|\\.(save|create|update|upsert)\\s*\\().*access_token',
     },
     recommendation: 'Encrypt access tokens at rest. Consider using short-lived tokens with refresh flow.',
     docUrl: 'https://developers.facebook.com/docs/facebook-login/security/',
@@ -221,7 +212,8 @@ export const BUNDLED_RULES: BundledRule[] = [
     description: 'Potentially logging access tokens or user data.',
     detection: {
       type: 'regex',
-      pattern: '(console\\.log|logger|print|debug).*(?:access_token|user_id|email)',
+      // More specific: only match when actually logging the value, not just referencing the field name
+      pattern: '(console\\.log|logger\\.(info|warn|error|debug)|print)\\s*\\([^)]*(?:access_token|accessToken|user\\.email|password)',
     },
     recommendation: 'Never log access tokens or PII. Use redaction for sensitive fields in logs.',
     docUrl: 'https://developers.facebook.com/docs/development/release/data-deletion/',

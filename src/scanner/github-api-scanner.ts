@@ -6,6 +6,7 @@
 import { ScanResult, Violation, SDKAnalysis } from '../types';
 import { SDKDetector, detectMetaPackages } from './sdk-detector';
 import { BUNDLED_RULES } from '../policies/bundled-policies';
+import { createAIScanner, AIScanner } from './ai-scanner';
 
 interface GitHubFile {
   name: string;
@@ -23,6 +24,7 @@ interface GitHubApiOptions {
   maxFiles?: number;     // Max files to fetch
   includePatterns?: string[];
   excludePatterns?: string[];
+  enableAI?: boolean;    // Enable AI-powered detection (requires env vars)
 }
 
 const SCANNABLE_EXTENSIONS = [
@@ -49,10 +51,22 @@ export class GitHubApiScanner {
   private onProgress?: (msg: string) => void;
   private retryCount = 0;
   private maxRetries = 3;
+  private aiScanner?: AIScanner;
 
-  constructor(options?: { token?: string; onProgress?: (msg: string) => void }) {
+  constructor(options?: { token?: string; onProgress?: (msg: string) => void; enableAI?: boolean }) {
     this.token = options?.token || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
     this.onProgress = options?.onProgress;
+
+    // Initialize AI scanner if enabled and configured
+    if (options?.enableAI) {
+      this.aiScanner = createAIScanner(this.onProgress) || undefined;
+      if (this.aiScanner) {
+        const config = this.aiScanner.isFullyConfigured();
+        this.log(`🤖 AI detection enabled (RAG: ${config.rag ? '✓' : '✗'}, LLM: ${config.llm ? '✓' : '✗'})`);
+      } else {
+        this.log(`⚠️ AI detection requested but not configured (need SUPABASE_URL, SUPABASE_ANON_KEY, VOYAGE_API_KEY)`);
+      }
+    }
   }
 
   private log(msg: string) {
@@ -209,6 +223,20 @@ export class GitHubApiScanner {
         // Regex-based rule checks
         const regexViolations = this.checkRegexRules(content, file.path);
         violations.push(...regexViolations);
+
+        // AI-powered detection (if enabled)
+        if (this.aiScanner) {
+          try {
+            const aiViolations = await this.aiScanner.analyzeFile(file.path, content, {
+              maxAnalysisPerFile: 5,
+              minConfidence: 0.7,
+            });
+            violations.push(...aiViolations);
+          } catch (aiError) {
+            // AI analysis is optional, don't fail the scan
+            this.log(`  ⚠️ AI analysis skipped: ${aiError instanceof Error ? aiError.message : 'Unknown error'}`);
+          }
+        }
 
       } catch (e) {
         // Skip files that fail to fetch
@@ -559,6 +587,7 @@ export async function scanGitHubRepoViaApi(
   const scanner = new GitHubApiScanner({
     token: options?.token,
     onProgress: options?.onProgress,
+    enableAI: options?.enableAI,
   });
   return scanner.scanRepo(repoUrl, options);
 }

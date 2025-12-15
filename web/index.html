@@ -348,6 +348,13 @@
         >
         <button id="scanBtn" onclick="startScan()">Scan</button>
       </div>
+      <div class="options" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 1rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: var(--text-muted);">
+          <input type="checkbox" id="enableAI" style="width: 16px; height: 16px;">
+          <span>Enable AI Detection</span>
+          <span style="font-size: 0.75rem; background: var(--info); color: white; padding: 2px 6px; border-radius: 4px;">Beta</span>
+        </label>
+      </div>
       <div id="status" class="status"></div>
     </div>
 
@@ -393,6 +400,7 @@
       const btn = document.getElementById('scanBtn');
       const status = document.getElementById('status');
       const results = document.getElementById('results');
+      const enableAI = document.getElementById('enableAI').checked;
 
       const url = urlInput.value.trim();
       if (!url) {
@@ -410,13 +418,14 @@
       results.classList.remove('show');
       btn.disabled = true;
       btn.textContent = 'Scanning...';
-      showStatus('<span class="spinner"></span>Cloning repository and scanning...', 'loading');
+      const aiMsg = enableAI ? ' with AI detection' : '';
+      showStatus(`<span class="spinner"></span>Scanning repository${aiMsg}...`, 'loading');
 
       try {
         const response = await fetch(`${API_URL}/api/scan`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
+          body: JSON.stringify({ url, enableAI })
         });
 
         const data = await response.json();

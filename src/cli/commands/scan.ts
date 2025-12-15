@@ -21,6 +21,7 @@ export function registerScanCommand(program: Command) {
     .option('--api', 'Force GitHub API mode (default when PAT available)')
     .option('--clone', 'Force git clone mode (even if PAT available)')
     .option('--max-files <number>', 'Max files to scan (API mode)', '500')
+    .option('--ai', 'Enable AI-powered detection (requires SUPABASE_URL, SUPABASE_ANON_KEY, VOYAGE_API_KEY)')
     .action(async (pathOrUrl: string, options) => {
       try {
         let result: ScanResult;
@@ -40,12 +41,18 @@ export function registerScanCommand(program: Command) {
 
           if (useApiMode && token) {
             // Use GitHub API (faster, no download)
-            console.log('Mode: GitHub API (no download)\n');
+            console.log('Mode: GitHub API (no download)');
+            if (options.ai) {
+              console.log('AI Detection: Enabled\n');
+            } else {
+              console.log('');
+            }
             result = await scanGitHubRepoViaApi(pathOrUrl, {
               branch: options.branch,
               token,
               maxFiles: parseInt(options.maxFiles),
               excludePatterns: options.ignore?.split(','),
+              enableAI: options.ai,
               onProgress: (msg) => console.log(msg),
             });
           } else {

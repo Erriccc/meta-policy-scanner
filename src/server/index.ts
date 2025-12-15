@@ -24,10 +24,11 @@ interface ScanRequest {
   url: string;
   branch?: string;
   useApi?: boolean;
+  enableAI?: boolean;
 }
 
 async function handleScan(body: ScanRequest): Promise<object> {
-  const { url, branch, useApi } = body;
+  const { url, branch, useApi, enableAI } = body;
 
   if (!url) {
     throw new Error('Repository URL is required');
@@ -49,10 +50,11 @@ async function handleScan(body: ScanRequest): Promise<object> {
   let result;
 
   if (shouldUseApi && githubPat) {
-    console.log(`Scanning ${owner}/${repo} via GitHub API...`);
+    console.log(`Scanning ${owner}/${repo} via GitHub API${enableAI ? ' (AI enabled)' : ''}...`);
     result = await scanGitHubRepoViaApi(url, {
       branch,
       token: githubPat,
+      enableAI,
       onProgress: (msg) => console.log(msg),
     });
   } else {

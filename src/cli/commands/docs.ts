@@ -1,6 +1,8 @@
 import { Command } from 'commander';
+import { existsSync } from 'fs';
 import { createClient } from '../../db/supabase';
 import { DocScraper } from '../../scraper/doc-scraper';
+import { JinaReaderScraper } from '../../scraper/jina-reader';
 import { searchBundledDocs, getAllBundledDocs } from '../../policies/bundled-docs';
 
 export function registerDocsCommands(program: Command) {
@@ -289,5 +291,196 @@ export function registerDocsCommands(program: Command) {
           console.error(`\n❌ Error: ${message}\n`);
         }
       }
+    });
+
+  // ============================================
+  // NEW: Jina Reader based commands (FREE!)
+  // ============================================
+
+  // Ingest URLs from file
+  docs
+    .command('ingest <file>')
+    .description('Ingest URLs from file (one URL per line) using Jina Reader (FREE)')
+    .option('-p, --platform <platform>', 'Override platform detection')
+    .action(async (file: string, options) => {
+      try {
+        const openaiKey = process.env.OPENAI_API_KEY;
+
+        if (!openaiKey) {
+          console.log('\n❌ OPENAI_API_KEY not set');
+          console.log('   Get an API key at: https://platform.openai.com');
+          console.log('   Add to .env: OPENAI_API_KEY=your-key\n');
+          return;
+        }
+
+        if (!existsSync(file)) {
+          console.log(`\n❌ File not found: ${file}\n`);
+          return;
+        }
+
+        console.log('\n📚 Ingesting URLs via Jina Reader (FREE)\n');
+        console.log('Pipeline: URL → Jina Reader → Chunk → OpenAI Embed → Supabase\n');
+        console.log('━'.repeat(60));
+
+        const supabase = createClient();
+        const scraper = new JinaReaderScraper(supabase, openaiKey, {
+          onProgress: (msg) => console.log(msg),
+        });
+
+        const results = await scraper.ingestFromFile(file, {
+          platform: options.platform,
+        });
+
+        // Summary
+        const successful = results.filter(r => r.success);
+        const failed = results.filter(r => !r.success);
+        const totalChunks = successful.reduce((sum, r) => sum + r.chunksCreated, 0);
+
+        console.log('\n' + '━'.repeat(60));
+        console.log('📊 Ingestion Results:\n');
+        console.log(`   ✅ Successful: ${successful.length} URLs`);
+        console.log(`   ❌ Failed: ${failed.length} URLs`);
+        console.log(`   📄 Chunks created: ${totalChunks}`);
+
+        if (failed.length > 0) {
+          console.log('\n   Failed URLs:');
+          for (const f of failed) {
+            console.log(`     • ${f.url}: ${f.error}`);
+          }
+        }
+
+        console.log('\n━'.repeat(60));
+        console.log('✅ Done! Search with: meta-scan docs search "your query"');
+        console.log('━'.repeat(60) + '\n');
+
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('relation') && message.includes('does not exist')) {
+          console.log('\n❌ Database tables not found!');
+          console.log('   Run the schema first:');
+          console.log('   1. Go to your Supabase project');
+          console.log('   2. Open SQL Editor');
+          console.log('   3. Run: src/db/schema.sql\n');
+        } else {
+          console.error(`\n❌ Error: ${message}\n`);
+        }
+      }
+    });
+
+  // Add single URL
+  docs
+    .command('add <url>')
+    .description('Add a single URL to the index using Jina Reader (FREE)')
+    .option('-p, --platform <platform>', 'Override platform detection')
+    .action(async (url: string, options) => {
+      try {
+        const openaiKey = process.env.OPENAI_API_KEY;
+
+        if (!openaiKey) {
+          console.log('\n❌ OPENAI_API_KEY not set');
+          console.log('   Get an API key at: https://platform.openai.com');
+          console.log('   Add to .env: OPENAI_API_KEY=your-key\n');
+          return;
+        }
+
+        // Validate URL
+        try {
+          new URL(url);
+        } catch {
+          console.log(`\n❌ Invalid URL: ${url}\n`);
+          return;
+        }
+
+        console.log('\n📚 Adding URL via Jina Reader (FREE)\n');
+        console.log('━'.repeat(60));
+
+        const supabase = createClient();
+        const scraper = new JinaReaderScraper(supabase, openaiKey, {
+          onProgress: (msg) => console.log(msg),
+        });
+
+        const result = await scraper.ingestUrl(url, {
+          platform: options.platform,
+        });
+
+        console.log('\n' + '━'.repeat(60));
+
+        if (result.success) {
+          console.log(`✅ Successfully added: ${url}`);
+          console.log(`   Chunks created: ${result.chunksCreated}`);
+          console.log('\n💡 Search with: meta-scan docs search "your query"');
+        } else {
+          console.log(`❌ Failed to add: ${url}`);
+          console.log(`   Error: ${result.error}`);
+        }
+
+        console.log('━'.repeat(60) + '\n');
+
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('relation') && message.includes('does not exist')) {
+          console.log('\n❌ Database tables not found! Run schema.sql first.\n');
+        } else {
+          console.error(`\n❌ Error: ${message}\n`);
+        }
+      }
+    });
+
+  // Create sample URLs file
+  docs
+    .command('init-urls')
+    .description('Create a sample urls.txt file with Meta API documentation URLs')
+    .action(async () => {
+      const fs = await import('fs');
+      const sampleUrls = `# Meta API Policy Documentation URLs
+# One URL per line, lines starting with # are comments
+# Run: meta-scan docs ingest urls.txt
+
+# Core Platform Terms
+https://developers.facebook.com/terms/
+https://developers.facebook.com/docs/development/release/data-deletion/
+
+# Graph API
+https://developers.facebook.com/docs/graph-api/overview/rate-limiting/
+https://developers.facebook.com/docs/graph-api/overview/
+https://developers.facebook.com/docs/graph-api/reference/
+
+# Instagram API
+https://developers.facebook.com/docs/instagram-api/
+https://developers.facebook.com/docs/instagram-api/overview/
+https://developers.facebook.com/docs/instagram-api/getting-started/
+
+# Messenger Platform
+https://developers.facebook.com/docs/messenger-platform/
+https://developers.facebook.com/docs/messenger-platform/policy/
+https://developers.facebook.com/docs/messenger-platform/send-messages/message-tags/
+
+# WhatsApp Business
+https://developers.facebook.com/docs/whatsapp/
+https://developers.facebook.com/docs/whatsapp/cloud-api/
+https://developers.facebook.com/docs/whatsapp/on-premises/
+
+# Marketing API
+https://developers.facebook.com/docs/marketing-apis/
+https://developers.facebook.com/docs/marketing-api/overview/
+
+# Login & Security
+https://developers.facebook.com/docs/facebook-login/security/
+https://developers.facebook.com/docs/facebook-login/guides/access-tokens/
+`;
+
+      const filename = 'urls.txt';
+
+      if (existsSync(filename)) {
+        console.log(`\n⚠️  ${filename} already exists. Not overwriting.\n`);
+        return;
+      }
+
+      fs.writeFileSync(filename, sampleUrls);
+      console.log(`\n✅ Created ${filename} with sample Meta API documentation URLs`);
+      console.log('\nNext steps:');
+      console.log('  1. Edit urls.txt to add/remove URLs');
+      console.log('  2. Run: node dist/bin/cli.js docs ingest urls.txt');
+      console.log('  3. Search: node dist/bin/cli.js docs search "rate limiting"\n');
     });
 }

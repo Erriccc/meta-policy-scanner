@@ -29,16 +29,16 @@
     "graph-api",
     "marketing-api"
   ],
-  "author": "Your Name <your.email@example.com>",
+  "author": "Erriccc",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/meta-policy-scanner.git"
+    "url": "https://github.com/Erriccc/meta-policy-scanner.git"
   },
   "bugs": {
-    "url": "https://github.com/your-org/meta-policy-scanner/issues"
+    "url": "https://github.com/Erriccc/meta-policy-scanner/issues"
   },
-  "homepage": "https://github.com/your-org/meta-policy-scanner#readme",
+  "homepage": "https://github.com/Erriccc/meta-policy-scanner#readme",
   "engines": {
     "node": ">=18.0.0"
   },

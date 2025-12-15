@@ -4,6 +4,51 @@ import { createClient } from '../../db/supabase';
 import { DocScraper } from '../../scraper/doc-scraper';
 import { JinaReaderScraper } from '../../scraper/jina-reader';
 import { searchBundledDocs, getAllBundledDocs } from '../../policies/bundled-docs';
+import { getProviderInfo, type EmbeddingProviderType, type EmbeddingConfig } from '../../embeddings';
+
+/**
+ * Get embedding config from environment and options
+ */
+function getEmbeddingConfig(providerOption?: string): EmbeddingConfig {
+  // Check for provider override or use environment
+  const provider = (providerOption || process.env.EMBEDDING_PROVIDER || 'voyage') as EmbeddingProviderType;
+
+  switch (provider) {
+    case 'voyage':
+      const voyageKey = process.env.VOYAGE_API_KEY;
+      if (!voyageKey) {
+        throw new Error(
+          'VOYAGE_API_KEY not set. Get a FREE key at: https://dash.voyageai.com/\n' +
+          '   Add to .env: VOYAGE_API_KEY=your-key\n' +
+          '   FREE tier: 200 million tokens!'
+        );
+      }
+      return { provider: 'voyage', apiKey: voyageKey };
+
+    case 'huggingface':
+      const hfToken = process.env.HF_TOKEN;
+      if (!hfToken) {
+        throw new Error(
+          'HF_TOKEN not set. Get a FREE token at: https://huggingface.co/settings/tokens\n' +
+          '   Add to .env: HF_TOKEN=hf_your-token'
+        );
+      }
+      return { provider: 'huggingface', apiKey: hfToken };
+
+    case 'openai':
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) {
+        throw new Error(
+          'OPENAI_API_KEY not set. Get an API key at: https://platform.openai.com\n' +
+          '   Add to .env: OPENAI_API_KEY=your-key'
+        );
+      }
+      return { provider: 'openai', apiKey: openaiKey };
+
+    default:
+      throw new Error(`Unknown embedding provider: ${provider}`);
+  }
+}
 
 export function registerDocsCommands(program: Command) {
   const docs = program.command('docs').description('Manage policy documentation');
@@ -74,16 +119,20 @@ export function registerDocsCommands(program: Command) {
     .description('Search policy documentation (bundled + scraped)')
     .option('-n, --limit <number>', 'Number of results', '5')
     .option('--bundled-only', 'Only search bundled docs (no database)')
+    .option('--provider <provider>', 'Embedding provider: voyage (default), huggingface, openai')
     .action(async (query: string, options) => {
       try {
         console.log(`\n🔍 Searching for: "${query}"\n`);
 
-        // Try semantic search if OpenAI key available and not bundled-only
-        if (!options.bundledOnly && process.env.OPENAI_API_KEY) {
+        // Try semantic search with configurable provider
+        if (!options.bundledOnly) {
           try {
+            const embeddingConfig = getEmbeddingConfig(options.provider);
             const supabase = createClient();
-            const scraper = new DocScraper(supabase, '', process.env.OPENAI_API_KEY);
-            const results = await scraper.searchPolicies(query, parseInt(options.limit));
+            const scraper = new JinaReaderScraper(supabase, {
+              embeddingConfig,
+            });
+            const results = await scraper.searchDocs(query, parseInt(options.limit));
 
             if (results.length > 0) {
               console.log('📊 Semantic Search Results (from scraped docs):\n');
@@ -100,8 +149,12 @@ export function registerDocsCommands(program: Command) {
               console.log('━'.repeat(60) + '\n');
               return;
             }
-          } catch {
-            // Fall through to bundled search
+          } catch (err) {
+            // Log error and fall through to bundled search
+            const errMsg = err instanceof Error ? err.message : String(err);
+            if (!errMsg.includes('not set')) {
+              console.log(`⚠️  Semantic search unavailable: ${errMsg}\n`);
+            }
           }
         }
 
@@ -126,7 +179,7 @@ export function registerDocsCommands(program: Command) {
           console.log('');
         }
         console.log('━'.repeat(60));
-        console.log('\n💡 Tip: Scrape more docs with "meta-scan docs update" for semantic search\n');
+        console.log('\n💡 Tip: Add more docs with "meta-scan docs add <url>" for semantic search\n');
 
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
@@ -297,21 +350,39 @@ export function registerDocsCommands(program: Command) {
   // NEW: Jina Reader based commands (FREE!)
   // ============================================
 
+  // List available embedding providers
+  docs
+    .command('providers')
+    .description('List available embedding providers')
+    .action(() => {
+      console.log('\n🔌 Available Embedding Providers\n');
+      console.log('━'.repeat(60));
+
+      for (const info of getProviderInfo()) {
+        const freeTag = info.free ? '✅ FREE' : '💰 PAID';
+        console.log(`\n  ${info.provider.toUpperCase()} (${freeTag})`);
+        console.log(`    ${info.description}`);
+        console.log(`    Dimensions: ${info.dimensions}`);
+      }
+
+      console.log('\n━'.repeat(60));
+      console.log('\n📋 Configuration:');
+      console.log('   Set via environment: EMBEDDING_PROVIDER=voyage|huggingface|openai');
+      console.log('   Or use --provider flag on commands');
+      console.log('\n💡 Recommended: Voyage AI (FREE 200M tokens!)');
+      console.log('   Get key at: https://dash.voyageai.com/');
+      console.log('━'.repeat(60) + '\n');
+    });
+
   // Ingest URLs from file
   docs
     .command('ingest <file>')
     .description('Ingest URLs from file (one URL per line) using Jina Reader (FREE)')
     .option('-p, --platform <platform>', 'Override platform detection')
+    .option('--provider <provider>', 'Embedding provider: voyage (default), huggingface, openai')
     .action(async (file: string, options) => {
       try {
-        const openaiKey = process.env.OPENAI_API_KEY;
-
-        if (!openaiKey) {
-          console.log('\n❌ OPENAI_API_KEY not set');
-          console.log('   Get an API key at: https://platform.openai.com');
-          console.log('   Add to .env: OPENAI_API_KEY=your-key\n');
-          return;
-        }
+        const embeddingConfig = getEmbeddingConfig(options.provider);
 
         if (!existsSync(file)) {
           console.log(`\n❌ File not found: ${file}\n`);
@@ -319,11 +390,12 @@ export function registerDocsCommands(program: Command) {
         }
 
         console.log('\n📚 Ingesting URLs via Jina Reader (FREE)\n');
-        console.log('Pipeline: URL → Jina Reader → Chunk → OpenAI Embed → Supabase\n');
+        console.log(`Pipeline: URL → Jina Reader → Chunk → ${embeddingConfig.provider.toUpperCase()} Embed → Supabase\n`);
         console.log('━'.repeat(60));
 
         const supabase = createClient();
-        const scraper = new JinaReaderScraper(supabase, openaiKey, {
+        const scraper = new JinaReaderScraper(supabase, {
+          embeddingConfig,
           onProgress: (msg) => console.log(msg),
         });
 
@@ -372,16 +444,10 @@ export function registerDocsCommands(program: Command) {
     .command('add <url>')
     .description('Add a single URL to the index using Jina Reader (FREE)')
     .option('-p, --platform <platform>', 'Override platform detection')
+    .option('--provider <provider>', 'Embedding provider: voyage (default), huggingface, openai')
     .action(async (url: string, options) => {
       try {
-        const openaiKey = process.env.OPENAI_API_KEY;
-
-        if (!openaiKey) {
-          console.log('\n❌ OPENAI_API_KEY not set');
-          console.log('   Get an API key at: https://platform.openai.com');
-          console.log('   Add to .env: OPENAI_API_KEY=your-key\n');
-          return;
-        }
+        const embeddingConfig = getEmbeddingConfig(options.provider);
 
         // Validate URL
         try {
@@ -392,10 +458,12 @@ export function registerDocsCommands(program: Command) {
         }
 
         console.log('\n📚 Adding URL via Jina Reader (FREE)\n');
+        console.log(`Using ${embeddingConfig.provider.toUpperCase()} embeddings`);
         console.log('━'.repeat(60));
 
         const supabase = createClient();
-        const scraper = new JinaReaderScraper(supabase, openaiKey, {
+        const scraper = new JinaReaderScraper(supabase, {
+          embeddingConfig,
           onProgress: (msg) => console.log(msg),
         });
 

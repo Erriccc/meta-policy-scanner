@@ -3,11 +3,17 @@
  * https://jina.ai/reader/
  *
  * Simply prepend https://r.jina.ai/ to any URL to get clean markdown
+ *
+ * Supports multiple embedding providers:
+ * - Voyage AI (FREE: 200M tokens) - RECOMMENDED
+ * - HuggingFace (FREE with rate limits)
+ * - OpenAI (paid)
  */
 
-import OpenAI from 'openai';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
+import type { EmbeddingProvider } from '../embeddings/types';
+import { createEmbeddingProvider, type EmbeddingConfig } from '../embeddings';
 
 const JINA_READER_BASE = 'https://r.jina.ai/';
 
@@ -23,17 +29,29 @@ export interface IngestResult {
   error?: string;
 }
 
+export interface JinaReaderConfig {
+  embeddingProvider?: EmbeddingProvider;
+  embeddingConfig?: EmbeddingConfig;
+  onProgress?: (message: string) => void;
+}
+
 export class JinaReaderScraper {
-  private openai: OpenAI;
+  private embeddingProvider: EmbeddingProvider;
   private onProgress?: (message: string) => void;
 
   constructor(
     private supabase: SupabaseClient,
-    openaiApiKey: string,
-    options?: { onProgress?: (message: string) => void }
+    config: JinaReaderConfig
   ) {
-    this.openai = new OpenAI({ apiKey: openaiApiKey });
-    this.onProgress = options?.onProgress;
+    // Use provided provider or create from config
+    if (config.embeddingProvider) {
+      this.embeddingProvider = config.embeddingProvider;
+    } else if (config.embeddingConfig) {
+      this.embeddingProvider = createEmbeddingProvider(config.embeddingConfig);
+    } else {
+      throw new Error('Either embeddingProvider or embeddingConfig is required');
+    }
+    this.onProgress = config.onProgress;
   }
 
   private log(message: string) {
@@ -194,28 +212,29 @@ export class JinaReaderScraper {
       .delete()
       .eq('policy_id', policyId);
 
-    // Process chunks in batches (OpenAI rate limits)
+    // Process chunks in batches
     const batchSize = 20;
     let totalInserted = 0;
+
+    this.log(`  Embedding with ${this.embeddingProvider.name} (${this.embeddingProvider.dimensions} dims)...`);
 
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
 
-      // Generate embeddings
-      const embeddingResponse = await this.openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: batch,
-      });
+      // Generate embeddings using configurable provider
+      const embeddingResults = await this.embeddingProvider.embedBatch(batch);
 
       // Prepare chunk records
       const chunkRecords = batch.map((chunkText, idx) => ({
         policy_id: policyId,
         chunk_text: chunkText,
         chunk_index: i + idx,
-        embedding: embeddingResponse.data[idx].embedding,
+        embedding: embeddingResults[idx].embedding,
         metadata: {
           platform,
           token_count: this.estimateTokens(chunkText),
+          embedding_provider: this.embeddingProvider.name,
+          embedding_dimensions: this.embeddingProvider.dimensions,
         },
       }));
 
@@ -313,18 +332,14 @@ export class JinaReaderScraper {
     policy_url?: string;
     metadata?: Record<string, unknown>;
   }>> {
-    // Generate embedding for query
-    const embeddingResponse = await this.openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: query,
-    });
+    // Generate embedding for query using configurable provider
+    const result = await this.embeddingProvider.embed(query);
+    const queryEmbedding = result.embedding;
 
-    const queryEmbedding = embeddingResponse.data[0].embedding;
-
-    // Search using pgvector
+    // Search using pgvector (lower threshold for better recall)
     const { data, error } = await this.supabase.rpc('search_policy_chunks', {
       query_embedding: queryEmbedding,
-      match_threshold: 0.5,
+      match_threshold: 0.3,
       match_count: limit,
     });
 
@@ -350,5 +365,15 @@ export class JinaReaderScraper {
     }
 
     return results;
+  }
+
+  /**
+   * Get the embedding provider being used
+   */
+  getEmbeddingProvider(): { name: string; dimensions: number } {
+    return {
+      name: this.embeddingProvider.name,
+      dimensions: this.embeddingProvider.dimensions,
+    };
   }
 }

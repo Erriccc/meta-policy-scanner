@@ -1,0 +1,39 @@
+# Source files (only publish dist)
+src/
+tsconfig.json
+.eslintrc.js
+.prettierrc
+
+# Development
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Git
+.git/
+.gitignore
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+jest.config.js
+
+# Docs (keep README)
+docs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config
+.meta-scan.config.json
+urls.txt

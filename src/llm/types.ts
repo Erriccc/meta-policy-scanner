@@ -2,6 +2,7 @@
  * LLM Provider Types
  *
  * Supports multiple LLM backends for AI-powered policy scanning:
+ * - Claude (best quality, Anthropic)
  * - Groq (FREE tier with fast inference)
  * - Ollama (FREE local models)
  * - OpenAI (paid, original implementation)
@@ -21,7 +22,7 @@ export interface LLMProvider {
   analyze(prompt: string): Promise<string>;
 }
 
-export type LLMProviderType = 'groq' | 'ollama' | 'openai';
+export type LLMProviderType = 'claude' | 'anthropic' | 'groq' | 'ollama' | 'openai';
 
 export interface LLMConfig {
   /**

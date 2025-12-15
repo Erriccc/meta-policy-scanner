@@ -316,7 +316,7 @@ export class AIScanner {
       : 'AI_HARDCODED_SECRET, AI_DATA_SHARING, AI_DATA_RETENTION, AI_AUTOMATION_ABUSE, AI_POLICY_CIRCUMVENTION, AI_SECURITY_ISSUE';
 
     // Build the prompt - code context is always included, guidelines come from config
-    const prompt = `You are a Meta Platform API policy compliance analyst. Analyze this code for policy violations.
+    const prompt = `You are a Meta Platform API policy compliance analyst. Analyze this code for REAL policy violations only.
 
 ## Code to Analyze (Line ${section.line})
 \`\`\`
@@ -335,17 +335,38 @@ ${knowledgeContext}
 
 ${codebaseContext}
 
+## CRITICAL: What IS and IS NOT a Violation
+
+### AI_HARDCODED_SECRET - ONLY flag if you see:
+- Literal API tokens: \`const token = "EAABx7abc123..."\` (50+ char string starting with EAA)
+- Literal app secrets: \`appSecret = "abc123def456..."\` (32 char hex string)
+- Passwords in code: \`password = "myP@ssword123"\`
+
+### NOT a hardcoded secret (DO NOT FLAG):
+- require() or import statements: \`require('./processWebhooks')\`
+- Variable names containing "secret", "token", "key", "password"
+- Environment variables: \`process.env.TOKEN\`, \`process.env.SECRET\`
+- Config references: \`config.apiKey\`, \`settings.token\`
+- Function/file names: \`processWebhooks\`, \`handleAuth\`, \`tokenService\`
+- Type definitions or interfaces
+- Comments mentioning secrets
+
+### General Rules:
+- A variable NAME containing "secret" is NOT a hardcoded secret
+- A require/import path is NEVER a secret
+- Only flag LITERAL credential VALUES, not references to credentials
+
 ## Response Format (JSON only)
 Return a JSON object with these fields:
-- isViolation: boolean - true only if there's a CLEAR violation
-- confidence: number (0.0-1.0) - use 0.85+ only for definite violations
+- isViolation: boolean - true ONLY if there's an ACTUAL secret value in the code
+- confidence: number (0.0-1.0) - use 0.85+ only for definite violations with literal values
 - ruleCode: string - one of: ${validRuleCodes}
 - ruleName: string - human readable violation name
 - severity: "error" | "warning" | "info"
-- message: string - describe the specific violation with quoted code
+- message: string - describe the specific violation with the ACTUAL secret value quoted
 - recommendation: string - how to fix the issue
 
-If no violation found:
+If no violation found (this is the expected case for most code):
 {"isViolation": false, "confidence": 0, "ruleCode": "", "ruleName": "", "severity": "info", "message": "", "recommendation": ""}`;
 
     try {

@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "start": "node dist/server/index.js",
+    "server": "node dist/server/index.js",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\"",

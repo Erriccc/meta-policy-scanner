@@ -18,7 +18,8 @@ export function registerScanCommand(program: Command) {
     .option('-o, --output <file>', 'Output file path for JSON results')
     .option('--ignore <patterns>', 'Glob patterns to ignore (comma-separated)')
     .option('--no-sdk-analysis', 'Skip SDK usage analysis')
-    .option('--api', 'Use GitHub API instead of git clone (experimental)')
+    .option('--api', 'Force GitHub API mode (default when PAT available)')
+    .option('--clone', 'Force git clone mode (even if PAT available)')
     .option('--max-files <number>', 'Max files to scan (API mode)', '500')
     .action(async (pathOrUrl: string, options) => {
       try {
@@ -32,23 +33,28 @@ export function registerScanCommand(program: Command) {
             console.log(`Branch: ${options.branch}`);
           }
 
-          if (options.api) {
-            // Experimental: Use GitHub API (no download)
-            console.log('Mode: GitHub API (experimental, no download)\n');
+          const token = options.auth || process.env.GITHUB_PAT;
+
+          // Auto-select mode: prefer API when PAT available, unless --clone specified
+          const useApiMode = options.clone ? false : (options.api || !!token);
+
+          if (useApiMode && token) {
+            // Use GitHub API (faster, no download)
+            console.log('Mode: GitHub API (no download)\n');
             result = await scanGitHubRepoViaApi(pathOrUrl, {
               branch: options.branch,
-              token: options.auth || process.env.GITHUB_PAT,
+              token,
               maxFiles: parseInt(options.maxFiles),
               excludePatterns: options.ignore?.split(','),
               onProgress: (msg) => console.log(msg),
             });
           } else {
-            // Default: Clone repo to temp directory (reliable)
+            // Fallback: Clone repo to temp directory
             console.log('Mode: git clone (shallow, cleaned after scan)\n');
             result = await scanGitHubRepo(pathOrUrl, {
               branch: options.branch,
               depth: parseInt(options.depth),
-              auth: options.auth || process.env.GITHUB_PAT,
+              auth: token,
               platform: options.platform,
               severity: options.severity as Severity,
               ignorePatterns: options.ignore?.split(','),

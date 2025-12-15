@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meta API Policy Scanner</title>
+  <style>
+    :root {
+      --primary: #0668E1;
+      --primary-dark: #0553b8;
+      --error: #dc3545;
+      --warning: #ffc107;
+      --success: #28a745;
+      --info: #17a2b8;
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --text: #212529;
+      --text-muted: #6c757d;
+      --border: #dee2e6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 0.875rem 1rem;
+      font-size: 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+
+    button {
+      padding: 0.875rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: white;
+      background: var(--primary);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+    }
+
+    button:disabled {
+      background: var(--text-muted);
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.loading {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .status.error {
+      background: #ffebee;
+      color: var(--error);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #results {
+      display: none;
+    }
+
+    #results.show {
+      display: block;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .stat.errors .stat-value { color: var(--error); }
+    .stat.warnings .stat-value { color: var(--warning); }
+    .stat.passed .stat-value { color: var(--success); }
+
+    .violations-list {
+      margin-top: 1rem;
+    }
+
+    .violation {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .violation-header {
+      padding: 1rem;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      cursor: pointer;
+    }
+
+    .violation-header:hover {
+      background: #e9ecef;
+    }
+
+    .severity-badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .severity-badge.error {
+      background: var(--error);
+      color: white;
+    }
+
+    .severity-badge.warning {
+      background: var(--warning);
+      color: #212529;
+    }
+
+    .severity-badge.info {
+      background: var(--info);
+      color: white;
+    }
+
+    .violation-title {
+      flex: 1;
+      font-weight: 500;
+    }
+
+    .violation-file {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    .violation-body {
+      padding: 1rem;
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .violation.expanded .violation-body {
+      display: block;
+    }
+
+    .code-snippet {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 1rem;
+      border-radius: 6px;
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 0.875rem;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+    }
+
+    .recommendation {
+      background: #e8f5e9;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      border-left: 4px solid var(--success);
+      margin-top: 0.75rem;
+    }
+
+    .recommendation strong {
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .doc-link {
+      display: inline-block;
+      margin-top: 0.5rem;
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .doc-link:hover {
+      text-decoration: underline;
+    }
+
+    .sdk-analysis {
+      margin-top: 1.5rem;
+    }
+
+    .sdk-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .sdk-tag {
+      padding: 0.375rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.875rem;
+    }
+
+    .sdk-tag.official {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .sdk-tag.unofficial {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .passed-banner {
+      text-align: center;
+      padding: 2rem;
+      background: #e8f5e9;
+      border-radius: 8px;
+      color: #2e7d32;
+    }
+
+    .passed-banner svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 1rem;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 2rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Meta API Policy Scanner</h1>
+      <p>Scan your codebase for Meta API policy violations</p>
+    </header>
+
+    <div class="card">
+      <div class="input-group">
+        <input
+          type="text"
+          id="repoUrl"
+          placeholder="Enter GitHub repository URL (e.g., https://github.com/user/repo)"
+          autocomplete="url"
+        >
+        <button id="scanBtn" onclick="startScan()">Scan</button>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div id="results">
+      <div class="card">
+        <h2>Scan Results</h2>
+        <div id="summary" class="summary"></div>
+        <div id="sdkAnalysis" class="sdk-analysis"></div>
+      </div>
+
+      <div id="violationsCard" class="card" style="display:none;">
+        <h2>Violations</h2>
+        <div id="violationsList" class="violations-list"></div>
+      </div>
+
+      <div id="passedCard" class="card" style="display:none;">
+        <div class="passed-banner">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          </svg>
+          <h3>All Clear!</h3>
+          <p>No policy violations found in this repository.</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>
+        <a href="https://github.com/Erriccc/meta-policy-scanner" target="_blank">GitHub</a> ·
+        <a href="https://www.npmjs.com/package/meta-policy-scanner" target="_blank">npm</a> ·
+        Built with Meta Platform Policies in mind
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    const API_URL = window.location.hostname === 'localhost'
+      ? 'http://localhost:3001'
+      : ''; // Production API URL
+
+    async function startScan() {
+      const urlInput = document.getElementById('repoUrl');
+      const btn = document.getElementById('scanBtn');
+      const status = document.getElementById('status');
+      const results = document.getElementById('results');
+
+      const url = urlInput.value.trim();
+      if (!url) {
+        showStatus('Please enter a GitHub repository URL', 'error');
+        return;
+      }
+
+      // Validate GitHub URL
+      if (!url.match(/^https?:\/\/github\.com\/[\w-]+\/[\w.-]+/)) {
+        showStatus('Please enter a valid GitHub repository URL', 'error');
+        return;
+      }
+
+      // Reset UI
+      results.classList.remove('show');
+      btn.disabled = true;
+      btn.textContent = 'Scanning...';
+      showStatus('<span class="spinner"></span>Cloning repository and scanning...', 'loading');
+
+      try {
+        const response = await fetch(`${API_URL}/api/scan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Scan failed');
+        }
+
+        displayResults(data);
+        status.classList.remove('show');
+        results.classList.add('show');
+
+      } catch (err) {
+        showStatus(`Error: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Scan';
+      }
+    }
+
+    function showStatus(message, type) {
+      const status = document.getElementById('status');
+      status.innerHTML = message;
+      status.className = `status show ${type}`;
+    }
+
+    function displayResults(data) {
+      const summary = document.getElementById('summary');
+      const violationsList = document.getElementById('violationsList');
+      const violationsCard = document.getElementById('violationsCard');
+      const passedCard = document.getElementById('passedCard');
+      const sdkAnalysis = document.getElementById('sdkAnalysis');
+
+      // Summary stats
+      const errors = data.violations?.filter(v => v.severity === 'error').length || 0;
+      const warnings = data.violations?.filter(v => v.severity === 'warning').length || 0;
+      const infos = data.violations?.filter(v => v.severity === 'info').length || 0;
+
+      summary.innerHTML = `
+        <div class="stat">
+          <div class="stat-value">${data.filesScanned || 0}</div>
+          <div class="stat-label">Files Scanned</div>
+        </div>
+        <div class="stat errors">
+          <div class="stat-value">${errors}</div>
+          <div class="stat-label">Errors</div>
+        </div>
+        <div class="stat warnings">
+          <div class="stat-value">${warnings}</div>
+          <div class="stat-label">Warnings</div>
+        </div>
+        <div class="stat ${errors + warnings === 0 ? 'passed' : ''}">
+          <div class="stat-value">${(data.scanDuration / 1000).toFixed(2)}s</div>
+          <div class="stat-label">Duration</div>
+        </div>
+      `;
+
+      // SDK Analysis
+      if (data.sdkAnalysis) {
+        const sdk = data.sdkAnalysis;
+        let sdkHtml = '<h3>SDK Analysis</h3>';
+
+        if (sdk.officialSdks?.length > 0) {
+          sdkHtml += '<div class="sdk-list">';
+          sdk.officialSdks.forEach(s => {
+            sdkHtml += `<span class="sdk-tag official">${s}</span>`;
+          });
+          sdkHtml += '</div>';
+        }
+
+        if (sdk.unofficialSdks?.length > 0) {
+          sdkHtml += '<p style="margin-top:0.5rem;color:var(--error)">Unofficial SDKs detected:</p>';
+          sdkHtml += '<div class="sdk-list">';
+          sdk.unofficialSdks.forEach(s => {
+            sdkHtml += `<span class="sdk-tag unofficial">${s}</span>`;
+          });
+          sdkHtml += '</div>';
+        }
+
+        sdkHtml += `<p style="margin-top:0.75rem;color:var(--text-muted)">Direct API calls: ${sdk.directApiCalls || 0}</p>`;
+        sdkAnalysis.innerHTML = sdkHtml;
+      }
+
+      // Violations
+      if (data.violations?.length > 0) {
+        violationsCard.style.display = 'block';
+        passedCard.style.display = 'none';
+
+        // Group by file
+        const grouped = {};
+        data.violations.forEach(v => {
+          const key = `${v.ruleCode}-${v.file}`;
+          if (!grouped[key]) {
+            grouped[key] = { ...v, count: 1 };
+          } else {
+            grouped[key].count++;
+          }
+        });
+
+        violationsList.innerHTML = Object.values(grouped).map(v => `
+          <div class="violation" onclick="this.classList.toggle('expanded')">
+            <div class="violation-header">
+              <span class="severity-badge ${v.severity}">${v.severity}</span>
+              <span class="violation-title">${v.ruleName}</span>
+              <span class="violation-file">${v.file}${v.count > 1 ? ` (${v.count}x)` : ''}</span>
+            </div>
+            <div class="violation-body">
+              <p><strong>Rule:</strong> ${v.ruleCode}</p>
+              <p><strong>Line:</strong> ${v.line}</p>
+              ${v.codeSnippet ? `<pre class="code-snippet">${escapeHtml(v.codeSnippet)}</pre>` : ''}
+              ${v.recommendation ? `
+                <div class="recommendation">
+                  <strong>Recommendation</strong>
+                  ${v.recommendation}
+                </div>
+              ` : ''}
+              ${v.docUrls?.length > 0 ? `
+                <a class="doc-link" href="${v.docUrls[0]}" target="_blank">View Documentation</a>
+              ` : ''}
+            </div>
+          </div>
+        `).join('');
+      } else {
+        violationsCard.style.display = 'none';
+        passedCard.style.display = 'block';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Allow Enter key to trigger scan
+    document.getElementById('repoUrl').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') startScan();
+    });
+  </script>
+</body>
+</html>

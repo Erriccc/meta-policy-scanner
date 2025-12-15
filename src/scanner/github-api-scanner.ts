@@ -5,6 +5,7 @@
 
 import { ScanResult, Violation, SDKAnalysis } from '../types';
 import { SDKDetector, detectMetaPackages } from './sdk-detector';
+import { BUNDLED_RULES } from '../policies/bundled-policies';
 
 interface GitHubFile {
   name: string;
@@ -505,53 +506,33 @@ export class GitHubApiScanner {
     const violations: Violation[] = [];
     const lines = content.split('\n');
 
-    const rules = [
-      {
-        code: 'TOKEN_EXPOSED',
-        name: 'Access Token in Source Code',
-        pattern: /(EAAA|access_token\s*=\s*['"])[A-Za-z0-9_-]{50,}/gi,
-        severity: 'error' as const,
-        platform: 'all' as const,
-        recommendation: 'Store tokens in environment variables',
-      },
-      {
-        code: 'DEPRECATED_API_VERSION',
-        name: 'Deprecated API Version',
-        pattern: /graph\.facebook\.com\/v[1-9]\./gi,
-        severity: 'warning' as const,
-        platform: 'all' as const,
-        recommendation: 'Upgrade to v18.0 or later',
-      },
-      {
-        code: 'HUMAN_AGENT_ABUSE',
-        name: 'HUMAN_AGENT Tag Misuse',
-        pattern: /HUMAN_AGENT.*:\s*true|messaging_type.*HUMAN_AGENT/gi,
-        severity: 'error' as const,
-        platform: 'messenger' as const,
-        recommendation: 'Only use HUMAN_AGENT within 7 days of user message',
-      },
-    ];
-
+    // Use BUNDLED_RULES for consistent detection across all scan modes
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      for (const rule of rules) {
-        if (rule.pattern.test(line)) {
-          // Reset regex lastIndex
-          rule.pattern.lastIndex = 0;
+      for (const rule of BUNDLED_RULES) {
+        // Skip rules without regex patterns
+        if (!rule.detection.pattern) continue;
 
-          violations.push({
-            ruleCode: rule.code,
-            ruleName: rule.name,
-            severity: rule.severity,
-            platform: rule.platform,
-            file: filePath,
-            line: i + 1,
-            column: 0,
-            message: `${rule.name} detected`,
-            codeSnippet: line.trim().substring(0, 100),
-            recommendation: rule.recommendation,
-          });
+        try {
+          const pattern = new RegExp(rule.detection.pattern, 'gi');
+          if (pattern.test(line)) {
+            violations.push({
+              ruleCode: rule.code,
+              ruleName: rule.name,
+              severity: rule.severity,
+              platform: rule.platform,
+              file: filePath,
+              line: i + 1,
+              column: line.search(new RegExp(rule.detection.pattern, 'i')) + 1,
+              message: rule.description,
+              codeSnippet: line.trim().substring(0, 100),
+              recommendation: rule.recommendation,
+              docUrls: rule.docUrl ? [rule.docUrl] : undefined,
+            });
+          }
+        } catch {
+          // Invalid regex pattern, skip
         }
       }
     }

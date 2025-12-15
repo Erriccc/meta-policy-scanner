@@ -181,6 +181,22 @@ export const BUNDLED_RULES: BundledRule[] = [
     docUrl: 'https://developers.facebook.com/docs/graph-api/overview/rate-limiting/',
   },
 
+  // === WEBHOOK SECURITY ===
+  {
+    code: 'WEBHOOK_NO_VERIFICATION',
+    name: 'Webhook Without Signature Verification',
+    platform: 'all',
+    severity: 'error',
+    category: 'Security',
+    description: 'Webhook endpoint does not verify x-hub-signature header. This allows attackers to send fake webhook events.',
+    detection: {
+      type: 'regex',
+      pattern: 'webhook',
+    },
+    recommendation: 'Always verify webhook signatures using your app secret. Check x-hub-signature-256 header.',
+    docUrl: 'https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verification-requests',
+  },
+
   // === DATA HANDLING ===
   {
     code: 'STORING_ACCESS_TOKEN',

@@ -1,0 +1,199 @@
+{
+  "$schema": "./schemas/analysis-rules.schema.json",
+  "version": "1.0.0",
+  "description": "Rules for AI analysis - what IS and IS NOT a violation. Edit this to tune AI behavior without changing code.",
+
+  "violationTypes": {
+    "hardcodedSecrets": {
+      "id": "AI_HARDCODED_SECRET",
+      "name": "Hardcoded Secret",
+      "severity": "error",
+      "description": "Literal credential strings embedded in source code",
+      "isViolation": [
+        "Literal token strings: const token = \"EAABx7...\"",
+        "Hardcoded app secrets: app_secret = \"abc123def456\"",
+        "API keys as string literals in code",
+        "Credentials in config files committed to repo"
+      ],
+      "notViolation": [
+        "Environment variables: process.env.TOKEN, process.env.API_KEY",
+        "Config objects: config.secret, settings.apiKey",
+        "Function parameters receiving credentials",
+        "Secrets from vault services (AWS SSM, HashiCorp Vault)",
+        "Encrypted or hashed values",
+        "Placeholder strings: \"YOUR_TOKEN_HERE\", \"<api-key>\""
+      ],
+      "docs": ["accessTokens"]
+    },
+
+    "dataSharing": {
+      "id": "AI_DATA_SHARING",
+      "name": "Unauthorized Data Sharing",
+      "severity": "error",
+      "description": "Sending Meta user data to non-Meta third party services",
+      "isViolation": [
+        "Sending user data to external analytics: fetch('https://analytics.com', {body: userData})",
+        "Posting PII to non-Meta webhooks",
+        "Exporting user lists to third-party CRMs without consent",
+        "Sharing access tokens with external services"
+      ],
+      "notViolation": [
+        "Displaying images from URLs (rendering media)",
+        "Returning data to the authenticated user",
+        "Internal logging without PII/tokens",
+        "Sending data to Meta's own APIs",
+        "Server-to-server within same organization",
+        "Analytics on aggregated/anonymized data"
+      ],
+      "docs": ["dataUse", "developerPolicies"]
+    },
+
+    "dataRetention": {
+      "id": "AI_DATA_RETENTION",
+      "name": "Data Retention Violation",
+      "severity": "warning",
+      "description": "Storing user data beyond allowed timeframes without proper controls",
+      "isViolation": [
+        "Permanent storage of user profiles without TTL",
+        "Caching user data with no expiry (TTL=0 or forever)",
+        "No data deletion mechanism for user requests",
+        "Storing data without refresh mechanism beyond 24 hours"
+      ],
+      "notViolation": [
+        "Cache with TTL <= 24 hours",
+        "Database with cleanup/purge jobs",
+        "Soft-delete with scheduled hard-delete",
+        "Data refreshed on each access",
+        "Aggregated/anonymized historical data"
+      ],
+      "docs": ["dataRetention", "dataUse"]
+    },
+
+    "automationAbuse": {
+      "id": "AI_AUTOMATION_ABUSE",
+      "name": "Automation Policy Violation",
+      "severity": "error",
+      "description": "Bulk operations or automation without proper controls",
+      "isViolation": [
+        "Infinite loops sending messages without delays",
+        "Bulk DMs without user-initiated action",
+        "Scraping without rate limiting",
+        "Automated posting exceeding rate limits",
+        "Bot behavior without proper disclosure"
+      ],
+      "notViolation": [
+        "Queued job processors with delays",
+        "Batch operations respecting rate limits",
+        "SDK-based automation (handles limits internally)",
+        "User-triggered bulk actions with confirmation",
+        "Scheduled posts within limits"
+      ],
+      "docs": ["rateLimiting", "messengerPolicy", "instagramMessaging"]
+    },
+
+    "policyCircumvention": {
+      "id": "AI_POLICY_CIRCUMVENTION",
+      "name": "Policy Circumvention",
+      "severity": "error",
+      "description": "Deliberately bypassing Meta's security or policy controls",
+      "isViolation": [
+        "Using undocumented/private API endpoints",
+        "Faking user agents or headers to bypass detection",
+        "Scraping web UI instead of using official APIs",
+        "Circumventing rate limits via multiple accounts",
+        "Accessing data without proper permissions"
+      ],
+      "notViolation": [
+        "Using official Graph API endpoints",
+        "Standard SDK method calls",
+        "Requesting additional permissions through proper flow",
+        "Implementing retry logic with backoff"
+      ],
+      "docs": ["platformTerms", "developerPolicies"]
+    },
+
+    "webhookSecurity": {
+      "id": "AI_WEBHOOK_SECURITY",
+      "name": "Webhook Security Issue",
+      "severity": "error",
+      "description": "Webhook handlers without proper signature verification",
+      "isViolation": [
+        "Processing webhooks without X-Hub-Signature-256 check",
+        "Using timing-unsafe string comparison for signatures",
+        "Logging full webhook payloads with user data"
+      ],
+      "notViolation": [
+        "Verification in middleware (check full handler chain)",
+        "Using official SDK webhook verification",
+        "Signature check before any processing",
+        "Verification in API gateway/proxy layer"
+      ],
+      "docs": ["webhookSecurity", "webhooks"]
+    },
+
+    "messagingViolation": {
+      "id": "AI_MESSAGING_VIOLATION",
+      "name": "Messaging Policy Violation",
+      "severity": "error",
+      "description": "Violations of platform messaging rules",
+      "isViolation": [
+        "Automated DMs without user-initiated action",
+        "Messages outside 24-hour window without approval",
+        "Bulk unsolicited promotional messages",
+        "Messaging users who haven't interacted with your app"
+      ],
+      "notViolation": [
+        "Responses to user messages within 24h window",
+        "Approved message templates (WhatsApp)",
+        "One-time notification with user permission",
+        "Customer service responses"
+      ],
+      "docs": ["instagramMessaging", "messengerPolicy", "whatsappPolicy"]
+    }
+  },
+
+  "analysisGuidelines": {
+    "approach": [
+      "Focus on what code ACTUALLY DOES, not what it might do",
+      "Consider that auth, rate limiting, validation often happen in middleware",
+      "Check codebase context before assuming something is missing",
+      "If uncertain, it's probably not a violation",
+      "Only flag with confidence >= 0.85 for clear violations"
+    ],
+    "neverFlag": [
+      "Import/export statements, type definitions, interfaces",
+      "Comments, documentation, or disabled/commented code",
+      "Standard Meta API calls (that's the intended use)",
+      "Code where security is handled elsewhere in the codebase",
+      "Environment variable usage (process.env.*)",
+      "Configuration file references"
+    ],
+    "confidenceGuidelines": {
+      "0.95+": "Absolutely certain - literal hardcoded secret visible",
+      "0.90-0.94": "Very confident - clear policy violation in code",
+      "0.85-0.89": "Confident - likely violation but some context missing",
+      "below 0.85": "Do not flag - insufficient evidence"
+    }
+  },
+
+  "suspiciousPatterns": {
+    "description": "Patterns that trigger AI analysis. Add custom patterns here.",
+    "patterns": [
+      {"pattern": "user(?:_)?(?:data|info|profile)", "category": "data-handling", "description": "User data handling"},
+      {"pattern": "(?:store|save|persist|cache).*(?:token|secret|credential)", "category": "credentials", "description": "Credential storage"},
+      {"pattern": "(?:share|send|transmit|export).*(?:user|data|personal)", "category": "data-sharing", "description": "Data sharing"},
+      {"pattern": "(?:scrape|crawl|extract|harvest)", "category": "scraping", "description": "Data scraping"},
+      {"pattern": "(?:automate|bot|automated)", "category": "automation", "description": "Automation"},
+      {"pattern": "(?:bulk|mass|batch).*(?:message|post|send)", "category": "bulk-actions", "description": "Bulk messaging"},
+      {"pattern": "(?:bypass|circumvent|workaround)", "category": "circumvention", "description": "Policy circumvention"},
+      {"pattern": "rate.?limit", "category": "rate-limiting", "description": "Rate limiting"},
+      {"pattern": "webhook.*(?:receive|handle|process)", "category": "webhooks", "description": "Webhook handling"},
+      {"pattern": "(?:graph|api)\\.facebook\\.com", "category": "api-usage", "description": "Facebook API"},
+      {"pattern": "(?:instagram|messenger|whatsapp).*(?:api|send|post)", "category": "platform-api", "description": "Platform API"},
+      {"pattern": "(?:createTable|CREATE TABLE|schema\\s*=)", "category": "database", "description": "Database schema"},
+      {"pattern": "(?:retention|ttl|expire|delete.*after)", "category": "data-retention", "description": "Data retention"},
+      {"pattern": "(?:s3|gcs|blob|storage).*(?:upload|put|store)", "category": "cloud-storage", "description": "Cloud storage"},
+      {"pattern": "(?:redis|memcache|cache).*(?:set|store|save)", "category": "caching", "description": "Caching"}
+    ]
+  }
+}

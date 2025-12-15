@@ -1,0 +1,52 @@
+{
+  "platform": "messenger",
+  "displayName": "Messenger",
+  "version": "1.0.0",
+  "policyUrl": "https://developers.facebook.com/docs/messenger-platform/policy",
+
+  "specificRules": [
+    {
+      "id": "MSG_24HR_STANDARD",
+      "name": "24-Hour Standard Messaging Window",
+      "severity": "error",
+      "description": "Standard messages only within 24 hours of last user interaction",
+      "recommendation": "Use message tags for approved use cases outside 24h window"
+    },
+    {
+      "id": "MSG_TAGS_REQUIRED",
+      "name": "Message Tags for Non-Promotional",
+      "severity": "warning",
+      "description": "Messages outside 24h window require approved message tags",
+      "validTags": ["CONFIRMED_EVENT_UPDATE", "POST_PURCHASE_UPDATE", "ACCOUNT_UPDATE", "HUMAN_AGENT"],
+      "recommendation": "Use appropriate message tag and ensure content matches tag purpose"
+    },
+    {
+      "id": "MSG_NO_PROMOTIONAL",
+      "name": "No Promotional Messages Outside Window",
+      "severity": "error",
+      "description": "Promotional/marketing messages prohibited outside 24h window",
+      "recommendation": "Only send promotional content within 24h of user interaction or via sponsored messages"
+    },
+    {
+      "id": "MSG_HANDOVER_PROTOCOL",
+      "name": "Handover Protocol for Human Agents",
+      "severity": "info",
+      "description": "Implement handover protocol when human agents take over from bots",
+      "docUrl": "https://developers.facebook.com/docs/messenger-platform/handover-protocol"
+    }
+  ],
+
+  "bestPractices": [
+    "Implement handover protocol for bot-to-human transitions",
+    "Use quick replies and buttons for better UX",
+    "Always provide opt-out mechanism",
+    "Track message delivery and read receipts"
+  ],
+
+  "messageTags": {
+    "CONFIRMED_EVENT_UPDATE": "Reminder or update for confirmed event",
+    "POST_PURCHASE_UPDATE": "Order status, shipping, receipt updates",
+    "ACCOUNT_UPDATE": "Account status changes (not marketing)",
+    "HUMAN_AGENT": "Human agent response (7-day window)"
+  }
+}

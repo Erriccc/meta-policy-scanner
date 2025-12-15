@@ -1,0 +1,53 @@
+{
+  "platform": "whatsapp",
+  "displayName": "WhatsApp Business",
+  "version": "1.0.0",
+  "policyUrl": "https://developers.facebook.com/docs/whatsapp/overview/policy",
+
+  "specificRules": [
+    {
+      "id": "WA_TEMPLATE_REQUIRED",
+      "name": "Message Templates Required Outside 24h",
+      "severity": "error",
+      "description": "Must use pre-approved message templates for business-initiated conversations",
+      "recommendation": "Create and submit message templates for approval before use",
+      "docUrl": "https://developers.facebook.com/docs/whatsapp/message-templates"
+    },
+    {
+      "id": "WA_OPT_IN_REQUIRED",
+      "name": "User Opt-In Required",
+      "severity": "error",
+      "description": "Must obtain explicit opt-in before sending WhatsApp messages",
+      "recommendation": "Implement clear opt-in flow and store consent records"
+    },
+    {
+      "id": "WA_QUALITY_RATING",
+      "name": "Quality Rating Monitoring",
+      "severity": "warning",
+      "description": "Monitor phone number quality rating to avoid restrictions",
+      "recommendation": "Track user blocks/reports, maintain high quality score"
+    },
+    {
+      "id": "WA_CONVERSATION_PRICING",
+      "name": "Conversation-Based Pricing",
+      "severity": "info",
+      "description": "WhatsApp charges per 24h conversation window",
+      "categories": ["marketing", "utility", "authentication", "service"],
+      "recommendation": "Design message flows to minimize conversation costs"
+    }
+  ],
+
+  "templateCategories": {
+    "MARKETING": "Promotional messages, offers, product announcements",
+    "UTILITY": "Transaction updates, account alerts, appointment reminders",
+    "AUTHENTICATION": "OTP codes, verification messages"
+  },
+
+  "bestPractices": [
+    "Always obtain and document user opt-in consent",
+    "Use message templates for business-initiated messages",
+    "Respond to user messages within 24h to stay in conversation window",
+    "Monitor quality rating and address issues quickly",
+    "Implement proper error handling for WhatsApp-specific errors"
+  ]
+}

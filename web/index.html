@@ -304,6 +304,88 @@
       color: #c62828;
     }
 
+    .ai-badge {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .static-badge {
+      background: #6c757d;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .analysis-section {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid var(--info);
+    }
+
+    .analysis-section h4 {
+      margin-bottom: 0.5rem;
+      color: var(--info);
+    }
+
+    .analysis-details {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .filter-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .filter-tab {
+      padding: 0.5rem 1rem;
+      border: 2px solid var(--border);
+      background: white;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .filter-tab:hover {
+      background: var(--bg);
+      border-color: var(--primary);
+    }
+
+    .filter-tab.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .filter-tab .count {
+      background: rgba(0,0,0,0.1);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .filter-tab.active .count {
+      background: rgba(255,255,255,0.3);
+    }
+
     .passed-banner {
       text-align: center;
       padding: 2rem;
@@ -329,6 +411,150 @@
       color: var(--primary);
       text-decoration: none;
     }
+
+    /* Navigation tabs */
+    .nav-tab {
+      padding: 0.5rem 1.5rem;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 1rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .nav-tab:hover {
+      color: var(--primary);
+    }
+
+    .nav-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Tab content */
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Config dashboard styles */
+    .config-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .config-section h3 {
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .doc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .doc-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: var(--bg);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    .doc-item .doc-info {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .doc-item .doc-url {
+      color: var(--text);
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .doc-item .doc-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .doc-item .doc-actions button {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+      background: var(--error);
+      margin-left: 0.5rem;
+    }
+
+    .tip-card {
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      border-left: 4px solid var(--info);
+    }
+
+    .tip-card.error {
+      border-left-color: var(--error);
+    }
+
+    .tip-card.warning {
+      border-left-color: var(--warning);
+    }
+
+    .tip-card h4 {
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tip-card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .tip-card .recommendation {
+      background: white;
+      margin-top: 0.5rem;
+    }
+
+    .ingest-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .ingest-form input {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .ingest-form button {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    .badge-count {
+      background: var(--primary);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+    }
   </style>
 </head>
 <body>
@@ -336,27 +562,33 @@
     <header>
       <h1>Meta API Policy Scanner</h1>
       <p>Scan your codebase for Meta API policy violations</p>
+      <nav style="margin-top: 1rem;">
+        <button class="nav-tab active" onclick="showTab('scanner')">Scanner</button>
+        <button class="nav-tab" onclick="showTab('config')">Config Dashboard</button>
+      </nav>
     </header>
 
-    <div class="card">
-      <div class="input-group">
-        <input
-          type="text"
-          id="repoUrl"
-          placeholder="Enter GitHub repository URL (e.g., https://github.com/user/repo)"
-          autocomplete="url"
-        >
-        <button id="scanBtn" onclick="startScan()">Scan</button>
+    <!-- Scanner Tab -->
+    <div id="scannerTab" class="tab-content active">
+      <div class="card">
+        <div class="input-group">
+          <input
+            type="text"
+            id="repoUrl"
+            placeholder="Enter GitHub repository URL (e.g., https://github.com/user/repo)"
+            autocomplete="url"
+          >
+          <button id="scanBtn" onclick="startScan()">Scan</button>
+        </div>
+        <div class="options" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 1rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: var(--text-muted);">
+            <input type="checkbox" id="enableAI" style="width: 16px; height: 16px;">
+            <span>Enable AI Detection</span>
+            <span style="font-size: 0.75rem; background: var(--info); color: white; padding: 2px 6px; border-radius: 4px;">Beta</span>
+          </label>
+        </div>
+        <div id="status" class="status"></div>
       </div>
-      <div class="options" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 1rem;">
-        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; color: var(--text-muted);">
-          <input type="checkbox" id="enableAI" style="width: 16px; height: 16px;">
-          <span>Enable AI Detection</span>
-          <span style="font-size: 0.75rem; background: var(--info); color: white; padding: 2px 6px; border-radius: 4px;">Beta</span>
-        </label>
-      </div>
-      <div id="status" class="status"></div>
-    </div>
 
     <div id="results">
       <div class="card">
@@ -367,7 +599,13 @@
 
       <div id="violationsCard" class="card" style="display:none;">
         <h2>Violations</h2>
+        <div id="filterTabs" class="filter-tabs"></div>
         <div id="violationsList" class="violations-list"></div>
+      </div>
+
+      <div id="aiAnalysisCard" class="card" style="display:none;">
+        <h2>AI Analysis Summary</h2>
+        <div id="aiAnalysisSummary" class="analysis-section"></div>
       </div>
 
       <div id="passedCard" class="card" style="display:none;">
@@ -380,6 +618,49 @@
         </div>
       </div>
     </div>
+    </div><!-- end scannerTab -->
+
+    <!-- Config Dashboard Tab -->
+    <div id="configTab" class="tab-content">
+      <div class="card config-section">
+        <h3>📚 Indexed Policy Documents <span id="docCount" class="badge-count">0</span></h3>
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+          These documents are indexed in Supabase and used for AI-powered semantic search.
+          <br><strong>Voyage AI</strong> converts them to vector embeddings for similarity matching.
+        </p>
+        <div id="docList" class="doc-list">
+          <p style="color: var(--text-muted);">Loading...</p>
+        </div>
+        <div class="ingest-form">
+          <input type="text" id="ingestUrl" placeholder="Enter Meta docs URL to ingest (e.g., https://developers.facebook.com/docs/...)">
+          <button onclick="ingestDoc()">+ Add Doc</button>
+        </div>
+        <div id="ingestStatus" class="status" style="margin-top: 0.5rem;"></div>
+      </div>
+
+      <div class="card config-section">
+        <h3>💡 Custom Tips & Best Practices <span class="badge-count" id="tipCount">0</span></h3>
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+          Knowledge from experience that isn't in official Meta docs. Edit <code>knowledge/custom-rules.json</code> to add more.
+        </p>
+        <div id="tipsList"></div>
+      </div>
+
+      <div class="card config-section">
+        <h3>🚫 Common Rejection Reasons</h3>
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+          Things that commonly cause Meta app review rejections.
+        </p>
+        <div id="rejectionsList"></div>
+      </div>
+
+      <div class="card config-section">
+        <h3>⚙️ Server Status</h3>
+        <div id="serverStatus">
+          <p style="color: var(--text-muted);">Loading...</p>
+        </div>
+      </div>
+    </div><!-- end configTab -->
 
     <footer>
       <p>
@@ -452,17 +733,27 @@
       status.className = `status show ${type}`;
     }
 
+    let allViolations = [];
+    let currentFilter = 'all';
+
     function displayResults(data) {
       const summary = document.getElementById('summary');
       const violationsList = document.getElementById('violationsList');
       const violationsCard = document.getElementById('violationsCard');
       const passedCard = document.getElementById('passedCard');
       const sdkAnalysis = document.getElementById('sdkAnalysis');
+      const filterTabs = document.getElementById('filterTabs');
+      const aiAnalysisCard = document.getElementById('aiAnalysisCard');
+      const aiAnalysisSummary = document.getElementById('aiAnalysisSummary');
 
-      // Summary stats
-      const errors = data.violations?.filter(v => v.severity === 'error').length || 0;
-      const warnings = data.violations?.filter(v => v.severity === 'warning').length || 0;
-      const infos = data.violations?.filter(v => v.severity === 'info').length || 0;
+      // Store violations globally for filtering
+      allViolations = data.violations || [];
+
+      // Categorize violations
+      const aiViolations = allViolations.filter(v => v.ruleCode?.startsWith('AI_'));
+      const staticViolations = allViolations.filter(v => !v.ruleCode?.startsWith('AI_'));
+      const errors = allViolations.filter(v => v.severity === 'error').length;
+      const warnings = allViolations.filter(v => v.severity === 'warning').length;
 
       summary.innerHTML = `
         <div class="stat">
@@ -488,53 +779,138 @@
         const sdk = data.sdkAnalysis;
         let sdkHtml = '<h3>SDK Analysis</h3>';
 
-        if (sdk.officialSdks?.length > 0) {
+        if (sdk.official?.length > 0) {
           sdkHtml += '<div class="sdk-list">';
-          sdk.officialSdks.forEach(s => {
-            sdkHtml += `<span class="sdk-tag official">${s}</span>`;
+          sdk.official.forEach(s => {
+            sdkHtml += `<span class="sdk-tag official">${s.sdk || s}</span>`;
           });
           sdkHtml += '</div>';
         }
 
-        if (sdk.unofficialSdks?.length > 0) {
-          sdkHtml += '<p style="margin-top:0.5rem;color:var(--error)">Unofficial SDKs detected:</p>';
+        if (sdk.violations?.length > 0) {
+          sdkHtml += '<p style="margin-top:0.5rem;color:var(--error)">Unofficial/Deprecated SDKs:</p>';
           sdkHtml += '<div class="sdk-list">';
-          sdk.unofficialSdks.forEach(s => {
-            sdkHtml += `<span class="sdk-tag unofficial">${s}</span>`;
+          sdk.violations.forEach(s => {
+            sdkHtml += `<span class="sdk-tag unofficial">${s.sdk || s}</span>`;
           });
           sdkHtml += '</div>';
         }
 
-        sdkHtml += `<p style="margin-top:0.75rem;color:var(--text-muted)">Direct API calls: ${sdk.directApiCalls || 0}</p>`;
+        sdkHtml += `<p style="margin-top:0.75rem;color:var(--text-muted)">Direct API calls: ${sdk.directApi?.length || 0}</p>`;
         sdkAnalysis.innerHTML = sdkHtml;
       }
 
-      // Violations
-      if (data.violations?.length > 0) {
+      // AI Analysis Summary - show when AI was enabled
+      const aiEnabled = document.getElementById('enableAI').checked;
+      if (aiEnabled) {
+        aiAnalysisCard.style.display = 'block';
+        const hasAiResults = aiViolations.length > 0;
+        aiAnalysisSummary.innerHTML = `
+          <h4>🤖 AI-Powered Detection ${hasAiResults ? '' : '- No Additional Violations Found'}</h4>
+          <div class="analysis-details">
+            <p><strong>AI Violations:</strong> ${aiViolations.length}</p>
+            <p><strong>Static Violations:</strong> ${staticViolations.length}</p>
+            ${!hasAiResults ? `
+              <p style="margin-top:0.5rem;color:var(--warning);">
+                <strong>Note:</strong> AI analyzed suspicious code sections but found no policy violations,
+                or no relevant policies were indexed in the knowledge base.
+              </p>
+              <p style="font-size:0.8rem;margin-top:0.5rem;">
+                To improve AI detection, ensure Meta policy documents are ingested via <code>POST /api/docs/ingest</code>
+              </p>
+            ` : ''}
+          </div>
+        `;
+      } else {
+        aiAnalysisCard.style.display = 'none';
+      }
+
+      // Violations with filter tabs
+      if (allViolations.length > 0) {
         violationsCard.style.display = 'block';
         passedCard.style.display = 'none';
 
-        // Group by file
-        const grouped = {};
-        data.violations.forEach(v => {
-          const key = `${v.ruleCode}-${v.file}`;
-          if (!grouped[key]) {
-            grouped[key] = { ...v, count: 1 };
-          } else {
-            grouped[key].count++;
-          }
-        });
+        // Build filter tabs
+        filterTabs.innerHTML = `
+          <button class="filter-tab active" data-filter="all" onclick="filterViolations('all')">
+            All <span class="count">${allViolations.length}</span>
+          </button>
+          <button class="filter-tab" data-filter="static" onclick="filterViolations('static')">
+            Static <span class="count">${staticViolations.length}</span>
+          </button>
+          <button class="filter-tab" data-filter="ai" onclick="filterViolations('ai')">
+            AI <span class="count">${aiViolations.length}</span>
+          </button>
+          <button class="filter-tab" data-filter="error" onclick="filterViolations('error')">
+            Errors <span class="count">${errors}</span>
+          </button>
+          <button class="filter-tab" data-filter="warning" onclick="filterViolations('warning')">
+            Warnings <span class="count">${warnings}</span>
+          </button>
+        `;
 
-        violationsList.innerHTML = Object.values(grouped).map(v => `
+        renderViolations(allViolations);
+      } else {
+        violationsCard.style.display = 'none';
+        passedCard.style.display = 'block';
+      }
+    }
+
+    function filterViolations(filter) {
+      currentFilter = filter;
+
+      // Update active tab
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.filter === filter) {
+          tab.classList.add('active');
+        }
+      });
+
+      let filtered = allViolations;
+      if (filter === 'static') {
+        filtered = allViolations.filter(v => !v.ruleCode?.startsWith('AI_'));
+      } else if (filter === 'ai') {
+        filtered = allViolations.filter(v => v.ruleCode?.startsWith('AI_'));
+      } else if (filter === 'error' || filter === 'warning') {
+        filtered = allViolations.filter(v => v.severity === filter);
+      }
+
+      renderViolations(filtered);
+    }
+
+    function renderViolations(violations) {
+      const violationsList = document.getElementById('violationsList');
+
+      // Group by file
+      const grouped = {};
+      violations.forEach(v => {
+        const key = `${v.ruleCode}-${v.file}`;
+        if (!grouped[key]) {
+          grouped[key] = { ...v, count: 1 };
+        } else {
+          grouped[key].count++;
+        }
+      });
+
+      violationsList.innerHTML = Object.values(grouped).map(v => {
+        const isAI = v.ruleCode?.startsWith('AI_');
+        const badge = isAI
+          ? '<span class="ai-badge">AI</span>'
+          : '<span class="static-badge">Static</span>';
+
+        return `
           <div class="violation" onclick="this.classList.toggle('expanded')">
             <div class="violation-header">
               <span class="severity-badge ${v.severity}">${v.severity}</span>
-              <span class="violation-title">${v.ruleName}</span>
-              <span class="violation-file">${v.file}${v.count > 1 ? ` (${v.count}x)` : ''}</span>
+              <span class="violation-title">${v.ruleName}${badge}</span>
+              <span class="violation-file">${v.file}:${v.line}${v.count > 1 ? ` (${v.count}x)` : ''}</span>
             </div>
             <div class="violation-body">
               <p><strong>Rule:</strong> ${v.ruleCode}</p>
+              <p><strong>Platform:</strong> ${v.platform || 'all'}</p>
               <p><strong>Line:</strong> ${v.line}</p>
+              <p><strong>Message:</strong> ${v.message || v.ruleName}</p>
               ${v.codeSnippet ? `<pre class="code-snippet">${escapeHtml(v.codeSnippet)}</pre>` : ''}
               ${v.recommendation ? `
                 <div class="recommendation">
@@ -543,14 +919,15 @@
                 </div>
               ` : ''}
               ${v.docUrls?.length > 0 ? `
-                <a class="doc-link" href="${v.docUrls[0]}" target="_blank">View Documentation</a>
+                <a class="doc-link" href="${v.docUrls[0]}" target="_blank">📚 View Documentation</a>
               ` : ''}
             </div>
           </div>
-        `).join('');
-      } else {
-        violationsCard.style.display = 'none';
-        passedCard.style.display = 'block';
+        `;
+      }).join('');
+
+      if (violations.length === 0) {
+        violationsList.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem;">No violations match this filter.</p>';
       }
     }
 
@@ -563,6 +940,215 @@
     // Allow Enter key to trigger scan
     document.getElementById('repoUrl').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') startScan();
+    });
+
+    // Tab navigation
+    function showTab(tab) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+      document.querySelector(`.nav-tab[onclick*="${tab}"]`).classList.add('active');
+      document.getElementById(`${tab}Tab`).classList.add('active');
+
+      if (tab === 'config') {
+        loadConfigDashboard();
+      }
+    }
+
+    // Load config dashboard data
+    async function loadConfigDashboard() {
+      await Promise.all([
+        loadDocs(),
+        loadServerStatus(),
+        loadCustomRules()
+      ]);
+    }
+
+    // Load indexed documents
+    async function loadDocs() {
+      const docList = document.getElementById('docList');
+      const docCount = document.getElementById('docCount');
+
+      try {
+        const response = await fetch(`${API_URL}/api/docs`);
+        const data = await response.json();
+
+        docCount.textContent = data.total || 0;
+
+        if (data.documents?.length > 0) {
+          docList.innerHTML = data.documents.map(doc => {
+            const url = new URL(doc.url);
+            const shortUrl = url.pathname.replace('/docs/', '').replace(/\/$/, '');
+            const date = new Date(doc.last_scraped).toLocaleDateString();
+
+            return `
+              <div class="doc-item">
+                <div class="doc-info">
+                  <div class="doc-url" title="${doc.url}">${shortUrl}</div>
+                  <div class="doc-meta">${doc.chunkCount} chunks · Updated ${date}</div>
+                </div>
+                <div class="doc-actions">
+                  <a href="${doc.url}" target="_blank" style="color: var(--primary); text-decoration: none; margin-right: 0.5rem;">↗</a>
+                  <button onclick="deleteDoc(${doc.id}, '${shortUrl}')">Delete</button>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          docList.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No documents indexed yet. Add Meta policy URLs below.</p>';
+        }
+      } catch (err) {
+        docList.innerHTML = `<p style="color: var(--error);">Error loading docs: ${err.message}</p>`;
+      }
+    }
+
+    // Ingest new document
+    async function ingestDoc() {
+      const urlInput = document.getElementById('ingestUrl');
+      const status = document.getElementById('ingestStatus');
+      const url = urlInput.value.trim();
+
+      if (!url) {
+        status.innerHTML = 'Please enter a URL';
+        status.className = 'status show error';
+        return;
+      }
+
+      status.innerHTML = '<span class="spinner"></span>Ingesting document...';
+      status.className = 'status show loading';
+
+      try {
+        const response = await fetch(`${API_URL}/api/docs/ingest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          status.innerHTML = `✓ Ingested ${data.chunksCreated} chunks`;
+          status.className = 'status show';
+          status.style.background = '#e8f5e9';
+          status.style.color = '#2e7d32';
+          urlInput.value = '';
+          await loadDocs();
+        } else {
+          throw new Error(data.error || 'Ingestion failed');
+        }
+      } catch (err) {
+        status.innerHTML = `Error: ${err.message}`;
+        status.className = 'status show error';
+      }
+    }
+
+    // Delete document
+    async function deleteDoc(id, name) {
+      if (!confirm(`Delete "${name}" and all its chunks?`)) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/docs/${id}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          await loadDocs();
+        } else {
+          const data = await response.json();
+          alert(`Delete failed: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`Delete failed: ${err.message}`);
+      }
+    }
+
+    // Load server status
+    async function loadServerStatus() {
+      const statusDiv = document.getElementById('serverStatus');
+
+      try {
+        const response = await fetch(`${API_URL}/api/status`);
+        const data = await response.json();
+
+        statusDiv.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div class="tip-card" style="border-left-color: ${data.capabilities.basicScan ? 'var(--success)' : 'var(--error)'}">
+              <h4>${data.capabilities.basicScan ? '✓' : '✗'} Basic Scan</h4>
+              <p>Static pattern matching</p>
+            </div>
+            <div class="tip-card" style="border-left-color: ${data.capabilities.githubApi ? 'var(--success)' : 'var(--error)'}">
+              <h4>${data.capabilities.githubApi ? '✓' : '✗'} GitHub API</h4>
+              <p>No cloning required</p>
+            </div>
+            <div class="tip-card" style="border-left-color: ${data.capabilities.aiDetection ? 'var(--success)' : 'var(--error)'}">
+              <h4>${data.capabilities.aiDetection ? '✓' : '✗'} AI Detection</h4>
+              <p>RAG + Voyage embeddings</p>
+            </div>
+            <div class="tip-card" style="border-left-color: ${data.capabilities.llmAnalysis ? 'var(--success)' : 'var(--error)'}">
+              <h4>${data.capabilities.llmAnalysis ? '✓' : '✗'} LLM Analysis</h4>
+              <p>${data.llmProvider ? data.llmProvider.toUpperCase() : 'Not configured'}</p>
+            </div>
+          </div>
+          <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+            Server v${data.version} · ${API_URL || 'localhost'}
+          </p>
+        `;
+      } catch (err) {
+        statusDiv.innerHTML = `<p style="color: var(--error);">Cannot connect to server: ${err.message}</p>`;
+      }
+    }
+
+    // Load custom rules from knowledge file
+    async function loadCustomRules() {
+      const tipsList = document.getElementById('tipsList');
+      const rejectionsList = document.getElementById('rejectionsList');
+      const tipCount = document.getElementById('tipCount');
+
+      // Hardcoded from knowledge/custom-rules.json (in production, fetch from server)
+      const customRules = {
+        tips: [
+          { id: 'tip-001', category: 'rate-limiting', title: 'Exponential Backoff is Required', description: 'Meta APIs will temporarily block your app if you don\'t implement exponential backoff.', severity: 'warning', recommendation: 'Implement exponential backoff with jitter: wait = min(cap, base * 2^attempt) + random_jitter' },
+          { id: 'tip-002', category: 'webhooks', title: 'Always Verify Webhook Signatures', description: 'Unsigned webhook handlers are a common rejection reason. Meta requires X-Hub-Signature-256 validation.', severity: 'error', recommendation: 'Verify webhooks using HMAC-SHA256 with your app secret before processing any webhook payload' },
+          { id: 'tip-003', category: 'data-handling', title: 'Don\'t Cache User Data Beyond 24 Hours', description: 'Meta requires that cached user data be refreshed within 24 hours.', severity: 'warning', recommendation: 'Implement TTL of max 24 hours for any cached user data' },
+          { id: 'tip-004', category: 'instagram', title: 'No Automated DMs Without User Action', description: 'Sending automated Instagram DMs without explicit user action is strictly prohibited.', severity: 'error', recommendation: 'Only send messages in response to user-initiated actions within the 24-hour messaging window' },
+          { id: 'tip-005', category: 'tokens', title: 'Never Log Access Tokens', description: 'Access tokens in logs are a security violation and common audit failure point.', severity: 'error', recommendation: 'Redact or mask tokens in all logging. Use token references instead of actual values.' }
+        ],
+        commonRejections: [
+          { reason: 'Insufficient webhook security', solution: 'Add X-Hub-Signature-256 verification to all webhook endpoints' },
+          { reason: 'Data retention policy violation', solution: 'Implement 24-hour TTL and provide data deletion endpoint' },
+          { reason: 'Missing rate limit handling', solution: 'Add exponential backoff and respect X-Business-Use-Case-Usage headers' },
+          { reason: 'Automated messaging without user consent', solution: 'Only message users who explicitly opted in within 24-hour window' }
+        ]
+      };
+
+      tipCount.textContent = customRules.tips.length;
+
+      // Render tips
+      tipsList.innerHTML = customRules.tips.map(tip => `
+        <div class="tip-card ${tip.severity}">
+          <h4>
+            <span style="font-size: 0.75rem; background: ${tip.severity === 'error' ? 'var(--error)' : 'var(--warning)'}; color: white; padding: 2px 6px; border-radius: 4px;">${tip.severity.toUpperCase()}</span>
+            ${tip.title}
+          </h4>
+          <p>${tip.description}</p>
+          <div class="recommendation">
+            <strong>Recommendation:</strong> ${tip.recommendation}
+          </div>
+        </div>
+      `).join('');
+
+      // Render rejections
+      rejectionsList.innerHTML = customRules.commonRejections.map(r => `
+        <div class="tip-card error">
+          <h4>❌ ${r.reason}</h4>
+          <p><strong>Solution:</strong> ${r.solution}</p>
+        </div>
+      `).join('');
+    }
+
+    // Allow Enter key in ingest form
+    document.getElementById('ingestUrl')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') ingestDoc();
     });
   </script>
 </body>

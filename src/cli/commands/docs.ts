@@ -289,14 +289,16 @@ export function registerDocsCommands(program: Command) {
       }
     });
 
-  // List documentation sources
+  // List documentation sources with detailed info
   docs
     .command('list')
-    .description('List all indexed documentation')
-    .action(async () => {
+    .description('List all indexed policies with URLs, chunk counts, and last updated')
+    .option('--format <format>', 'Output format: table (default) or json', 'table')
+    .action(async (options) => {
       try {
         const supabase = createClient();
 
+        // Get all policies with their chunk counts
         const { data: policies, error } = await supabase
           .from('policies')
           .select(`
@@ -312,29 +314,88 @@ export function registerDocsCommands(program: Command) {
 
         if (!policies || policies.length === 0) {
           console.log('\n⚠️  No documentation indexed yet.');
-          console.log('Run: meta-scan docs update\n');
+          console.log('Run: meta-scan docs add <url> or meta-scan docs ingest <file>\n');
           return;
         }
 
+        // Get chunk counts for each policy
+        const { data: chunkCounts } = await supabase
+          .from('policy_chunks')
+          .select('policy_id')
+          .then(({ data, error }) => {
+            if (error) return { data: null };
+            const counts = new Map<number, number>();
+            for (const chunk of data || []) {
+              counts.set(chunk.policy_id, (counts.get(chunk.policy_id) || 0) + 1);
+            }
+            return { data: counts };
+          });
+
+        // Format output
+        if (options.format === 'json') {
+          const output = policies.map(policy => {
+            const platformData = policy.platforms as unknown as { name: string } | null;
+            return {
+              id: policy.id,
+              title: policy.title || 'Untitled',
+              url: policy.url,
+              platform: platformData?.name || 'unknown',
+              chunks: chunkCounts?.get(policy.id) || 0,
+              lastScraped: policy.last_scraped || null
+            };
+          });
+          console.log(JSON.stringify(output, null, 2));
+          return;
+        }
+
+        // Table format (default)
         console.log('\n📚 Indexed Documentation\n');
-        console.log('━'.repeat(80));
+        console.log('━'.repeat(100));
+        console.log(
+          'ID'.padEnd(6) +
+          'Title'.padEnd(35) +
+          'Chunks'.padEnd(10) +
+          'Last Updated'.padEnd(20) +
+          'URL'
+        );
+        console.log('━'.repeat(100));
 
         for (const policy of policies) {
           const date = policy.last_scraped
-            ? new Date(policy.last_scraped).toLocaleDateString()
+            ? new Date(policy.last_scraped).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              })
             : 'Never';
-          const platformData = policy.platforms as unknown as { name: string } | null;
-          const platform = platformData?.name || 'unknown';
 
-          console.log(`📄 ${policy.title || 'Untitled'}`);
-          console.log(`   Platform: ${platform}`);
-          console.log(`   URL: ${policy.url}`);
-          console.log(`   Last scraped: ${date}`);
-          console.log('');
+          const title = (policy.title || 'Untitled').substring(0, 33);
+          const titleDisplay = title.length < (policy.title || 'Untitled').length
+            ? title + '...'
+            : title;
+
+          const chunks = chunkCounts?.get(policy.id) || 0;
+
+          console.log(
+            String(policy.id).padEnd(6) +
+            titleDisplay.padEnd(35) +
+            String(chunks).padEnd(10) +
+            date.padEnd(20) +
+            policy.url
+          );
         }
 
-        console.log('━'.repeat(80));
-        console.log(`Total: ${policies.length} documents indexed\n`);
+        console.log('━'.repeat(100));
+
+        const totalChunks = Array.from(chunkCounts?.values() || [])
+          .reduce((sum, count) => sum + count, 0);
+
+        console.log(`\n📊 Summary:`);
+        console.log(`   Total policies: ${policies.length}`);
+        console.log(`   Total chunks: ${totalChunks}`);
+        console.log(`   Average chunks per policy: ${Math.round(totalChunks / policies.length)}`);
+        console.log('\n💡 Use "meta-scan docs delete <id-or-url>" to remove a policy');
+        console.log('💡 Use "meta-scan docs verify" to check index integrity\n');
 
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
@@ -550,5 +611,274 @@ https://developers.facebook.com/docs/facebook-login/guides/access-tokens/
       console.log('  1. Edit urls.txt to add/remove URLs');
       console.log('  2. Run: node dist/bin/cli.js docs ingest urls.txt');
       console.log('  3. Search: node dist/bin/cli.js docs search "rate limiting"\n');
+    });
+
+  // ============================================
+  // DOCS MANAGEMENT COMMANDS
+  // ============================================
+
+  // Delete a specific policy
+  docs
+    .command('delete <url-or-id>')
+    .description('Delete a specific policy and its chunks')
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .action(async (urlOrId: string, options) => {
+      try {
+        const supabase = createClient();
+
+        // Try to find the policy by URL or ID
+        let policyQuery = supabase
+          .from('policies')
+          .select('id, title, url');
+
+        // Check if it's a numeric ID or URL
+        const isNumeric = /^\d+$/.test(urlOrId);
+        if (isNumeric) {
+          policyQuery = policyQuery.eq('id', parseInt(urlOrId));
+        } else {
+          policyQuery = policyQuery.eq('url', urlOrId);
+        }
+
+        const { data: policies, error: findError } = await policyQuery;
+
+        if (findError) throw findError;
+
+        if (!policies || policies.length === 0) {
+          console.log(`\n❌ No policy found with ${isNumeric ? 'ID' : 'URL'}: ${urlOrId}\n`);
+          console.log('💡 Use "meta-scan docs list" to see all indexed policies\n');
+          return;
+        }
+
+        const policy = policies[0];
+
+        // Get chunk count
+        const { count: chunkCount } = await supabase
+          .from('policy_chunks')
+          .select('id', { count: 'exact', head: true })
+          .eq('policy_id', policy.id);
+
+        console.log('\n📄 Policy to delete:\n');
+        console.log('━'.repeat(60));
+        console.log(`   Title: ${policy.title}`);
+        console.log(`   URL: ${policy.url}`);
+        console.log(`   Chunks: ${chunkCount || 0}`);
+        console.log('━'.repeat(60));
+
+        // Confirmation prompt (unless --yes flag)
+        if (!options.yes) {
+          const readline = await import('readline');
+          const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+          });
+
+          const answer = await new Promise<string>((resolve) => {
+            rl.question('\n⚠️  Are you sure you want to delete this policy? (yes/no): ', resolve);
+          });
+          rl.close();
+
+          if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
+            console.log('\n❌ Deletion cancelled\n');
+            return;
+          }
+        }
+
+        // Delete the policy (cascade will delete chunks)
+        const { error: deleteError } = await supabase
+          .from('policies')
+          .delete()
+          .eq('id', policy.id);
+
+        if (deleteError) throw deleteError;
+
+        console.log('\n✅ Policy deleted successfully');
+        console.log(`   Removed ${chunkCount || 0} associated chunks\n`);
+
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('relation') && message.includes('does not exist')) {
+          console.log('\n❌ Database not set up. Run schema.sql first.\n');
+        } else {
+          console.error(`\n❌ Error: ${message}\n`);
+        }
+      }
+    });
+
+  // Verify documentation integrity
+  docs
+    .command('verify')
+    .description('Check integrity of indexed docs (count chunks, check for orphans)')
+    .action(async () => {
+      try {
+        const supabase = createClient();
+
+        console.log('\n🔍 Verifying documentation index integrity...\n');
+        console.log('━'.repeat(60));
+
+        // Get all policies
+        const { data: policies, error: policiesError } = await supabase
+          .from('policies')
+          .select('id, title, url');
+
+        if (policiesError) throw policiesError;
+
+        const policyCount = policies?.length || 0;
+        console.log(`📄 Total policies: ${policyCount}`);
+
+        // Get all chunks
+        const { data: chunks, error: chunksError } = await supabase
+          .from('policy_chunks')
+          .select('id, policy_id, embedding');
+
+        if (chunksError) throw chunksError;
+
+        const chunkCount = chunks?.length || 0;
+        console.log(`📦 Total chunks: ${chunkCount}`);
+
+        // Check for orphaned chunks (chunks without a policy)
+        const policyIds = new Set(policies?.map(p => p.id) || []);
+        const orphanedChunks = chunks?.filter(c => !policyIds.has(c.policy_id)) || [];
+
+        console.log('\n━'.repeat(60));
+        console.log('🔎 Integrity Checks:\n');
+
+        if (orphanedChunks.length > 0) {
+          console.log(`   ❌ Found ${orphanedChunks.length} orphaned chunks (no parent policy)`);
+          console.log('      These should be cleaned up.');
+        } else {
+          console.log('   ✅ No orphaned chunks found');
+        }
+
+        // Check for policies without chunks
+        const chunksByPolicy = new Map<number, number>();
+        for (const chunk of chunks || []) {
+          chunksByPolicy.set(chunk.policy_id, (chunksByPolicy.get(chunk.policy_id) || 0) + 1);
+        }
+
+        const policiesWithoutChunks = policies?.filter(p => !chunksByPolicy.has(p.id)) || [];
+        if (policiesWithoutChunks.length > 0) {
+          console.log(`   ⚠️  Found ${policiesWithoutChunks.length} policies without chunks:`);
+          for (const policy of policiesWithoutChunks.slice(0, 5)) {
+            console.log(`      - ${policy.title} (${policy.url})`);
+          }
+          if (policiesWithoutChunks.length > 5) {
+            console.log(`      ... and ${policiesWithoutChunks.length - 5} more`);
+          }
+        } else {
+          console.log('   ✅ All policies have chunks');
+        }
+
+        // Check for chunks without embeddings
+        const chunksWithoutEmbedding = chunks?.filter(c => !c.embedding) || [];
+        if (chunksWithoutEmbedding.length > 0) {
+          console.log(`   ⚠️  Found ${chunksWithoutEmbedding.length} chunks without embeddings`);
+          console.log('      These won\'t appear in semantic search results.');
+        } else {
+          console.log('   ✅ All chunks have embeddings');
+        }
+
+        // Show chunk distribution
+        if (policies && policies.length > 0) {
+          console.log('\n━'.repeat(60));
+          console.log('📊 Chunk Distribution:\n');
+
+          const sorted = Array.from(chunksByPolicy.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+          for (const [policyId, count] of sorted) {
+            const policy = policies.find(p => p.id === policyId);
+            if (policy) {
+              console.log(`   ${count} chunks: ${policy.title}`);
+            }
+          }
+
+          if (chunksByPolicy.size > 10) {
+            console.log(`   ... and ${chunksByPolicy.size - 10} more policies`);
+          }
+        }
+
+        console.log('\n━'.repeat(60));
+        console.log('✅ Verification complete\n');
+
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('relation') && message.includes('does not exist')) {
+          console.log('\n❌ Database not set up. Run schema.sql first.\n');
+        } else {
+          console.error(`\n❌ Error: ${message}\n`);
+        }
+      }
+    });
+
+  // Clear all documentation
+  docs
+    .command('clear')
+    .description('Clear ALL indexed docs (with confirmation)')
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .action(async (options) => {
+      try {
+        const supabase = createClient();
+
+        // Get counts
+        const { count: policyCount } = await supabase
+          .from('policies')
+          .select('id', { count: 'exact', head: true });
+
+        const { count: chunkCount } = await supabase
+          .from('policy_chunks')
+          .select('id', { count: 'exact', head: true });
+
+        if (!policyCount || policyCount === 0) {
+          console.log('\n⚠️  No documentation to clear.\n');
+          return;
+        }
+
+        console.log('\n⚠️  WARNING: This will delete ALL indexed documentation!\n');
+        console.log('━'.repeat(60));
+        console.log(`   Policies to delete: ${policyCount}`);
+        console.log(`   Chunks to delete: ${chunkCount || 0}`);
+        console.log('━'.repeat(60));
+
+        // Confirmation prompt (unless --yes flag)
+        if (!options.yes) {
+          const readline = await import('readline');
+          const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+          });
+
+          const answer = await new Promise<string>((resolve) => {
+            rl.question('\n⚠️  Type "DELETE ALL" to confirm: ', resolve);
+          });
+          rl.close();
+
+          if (answer !== 'DELETE ALL') {
+            console.log('\n❌ Clear operation cancelled\n');
+            return;
+          }
+        }
+
+        console.log('\n🗑️  Deleting all documentation...');
+
+        // Delete all policies (cascade will delete chunks)
+        const { error: deleteError } = await supabase
+          .from('policies')
+          .delete()
+          .neq('id', 0); // Delete all rows
+
+        if (deleteError) throw deleteError;
+
+        console.log('\n✅ All documentation cleared successfully');
+        console.log(`   Deleted ${policyCount} policies and ${chunkCount || 0} chunks\n`);
+
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('relation') && message.includes('does not exist')) {
+          console.log('\n❌ Database not set up. Run schema.sql first.\n');
+        } else {
+          console.error(`\n❌ Error: ${message}\n`);
+        }
+      }
     });
 }

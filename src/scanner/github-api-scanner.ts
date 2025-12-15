@@ -7,6 +7,7 @@ import { ScanResult, Violation, SDKAnalysis } from '../types';
 import { SDKDetector, detectMetaPackages } from './sdk-detector';
 import { BUNDLED_RULES } from '../policies/bundled-policies';
 import { createAIScanner, AIScanner } from './ai-scanner';
+import { createCodebaseIndex, CodebaseIndexer } from './codebase-indexer';
 
 interface GitHubFile {
   name: string;
@@ -57,15 +58,24 @@ export class GitHubApiScanner {
     this.token = options?.token || process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
     this.onProgress = options?.onProgress;
 
-    // Initialize AI scanner if enabled and configured
-    if (options?.enableAI) {
-      this.aiScanner = createAIScanner(this.onProgress) || undefined;
-      if (this.aiScanner) {
-        const config = this.aiScanner.isFullyConfigured();
-        this.log(`🤖 AI detection enabled (RAG: ${config.rag ? '✓' : '✗'}, LLM: ${config.llm ? '✓' : '✗'})`);
-      } else {
-        this.log(`⚠️ AI detection requested but not configured (need SUPABASE_URL, SUPABASE_ANON_KEY, VOYAGE_API_KEY)`);
-      }
+    // AI scanner initialization is deferred to scanRepo() since createAIScanner is now async
+    this.enableAI = options?.enableAI;
+  }
+
+  private enableAI?: boolean;
+
+  /**
+   * Initialize AI scanner (async)
+   */
+  private async initAIScanner(): Promise<void> {
+    if (!this.enableAI || this.aiScanner) return;
+
+    this.aiScanner = (await createAIScanner(this.onProgress)) || undefined;
+    if (this.aiScanner) {
+      const config = this.aiScanner.isFullyConfigured();
+      this.log(`🤖 AI detection enabled (RAG: ${config.rag ? '✓' : '✗'}, LLM: ${config.llm ? '✓' : '✗'}${config.llmProvider ? ` - ${config.llmProvider}` : ''})`);
+    } else {
+      this.log(`⚠️ AI detection requested but not configured (need SUPABASE_URL, SUPABASE_ANON_KEY, VOYAGE_API_KEY)`);
     }
   }
 
@@ -129,6 +139,9 @@ export class GitHubApiScanner {
     this.log(`Scanning ${owner}/${repo} (branch: ${branch}) via GitHub API...`);
     this.log(`No download required - fetching files directly from API\n`);
 
+    // Initialize AI scanner if enabled (async operation)
+    await this.initAIScanner();
+
     const violations: Violation[] = [];
     const sdkDetector = new SDKDetector();
     const sdkAnalysis: SDKAnalysis = {
@@ -147,11 +160,16 @@ export class GitHubApiScanner {
 
     this.log(`Found ${files.length} scannable files\n`);
 
+    // Collect file contents for codebase indexing
+    const fileContents: Array<{path: string, content: string}> = [];
+
     // Check package.json first
     const packageJson = files.find(f => f.name === 'package.json');
     if (packageJson) {
       try {
         const content = await this.fetchFileContent(packageJson.download_url!);
+        fileContents.push({ path: 'package.json', content });
+
         const pkgAnalysis = await detectMetaPackages(content);
 
         for (const pkg of pkgAnalysis.violations) {
@@ -186,6 +204,7 @@ export class GitHubApiScanner {
         await this.checkRateLimit();
 
         const content = await this.fetchFileContent(file.download_url!);
+        fileContents.push({ path: file.path, content });
         this.filesScanned++;
 
         // SDK Detection
@@ -246,6 +265,25 @@ export class GitHubApiScanner {
           break;
         }
       }
+    }
+
+    // Create codebase index from collected file contents
+    let codebaseIndex: CodebaseIndexer | undefined;
+    if (fileContents.length > 0) {
+      try {
+        codebaseIndex = await createCodebaseIndex(fileContents);
+        const structure = codebaseIndex.getStructure();
+        if (structure) {
+          this.log(`📊 Codebase: ${structure.summary}`);
+        }
+      } catch (e) {
+        this.log(`⚠️ Codebase indexing failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      }
+    }
+
+    // Set codebase index on AI scanner if available
+    if (this.aiScanner && codebaseIndex) {
+      this.aiScanner.setCodebaseIndex(codebaseIndex);
     }
 
     // Deduplicate violations

@@ -1,0 +1,159 @@
+{
+  "$schema": "./custom-rules.schema.json",
+  "version": "1.0.0",
+  "description": "Custom rules, tips, and best practices from experience - things not in official Meta docs",
+
+  "tips": [
+    {
+      "id": "tip-001",
+      "category": "rate-limiting",
+      "title": "Exponential Backoff is Required",
+      "description": "Meta APIs will temporarily block your app if you don't implement exponential backoff. This isn't always clear in docs.",
+      "severity": "warning",
+      "recommendation": "Implement exponential backoff with jitter: wait = min(cap, base * 2^attempt) + random_jitter"
+    },
+    {
+      "id": "tip-002",
+      "category": "webhooks",
+      "title": "Always Verify Webhook Signatures",
+      "description": "Unsigned webhook handlers are a common rejection reason. Meta requires X-Hub-Signature-256 validation.",
+      "severity": "error",
+      "recommendation": "Verify webhooks using HMAC-SHA256 with your app secret before processing any webhook payload"
+    },
+    {
+      "id": "tip-003",
+      "category": "data-handling",
+      "title": "Don't Cache User Data Beyond 24 Hours",
+      "description": "Meta requires that cached user data be refreshed within 24 hours. Stale data caching violates terms.",
+      "severity": "warning",
+      "recommendation": "Implement TTL (Time-To-Live) of max 24 hours for any cached user data"
+    },
+    {
+      "id": "tip-004",
+      "category": "instagram",
+      "title": "No Automated DMs Without User Action",
+      "description": "Sending automated Instagram DMs without explicit user action (like clicking a button) is strictly prohibited.",
+      "severity": "error",
+      "recommendation": "Only send messages in response to user-initiated actions within the 24-hour messaging window"
+    },
+    {
+      "id": "tip-005",
+      "category": "tokens",
+      "title": "Never Log Access Tokens",
+      "description": "Access tokens in logs are a security violation and common audit failure point.",
+      "severity": "error",
+      "recommendation": "Redact or mask tokens in all logging. Use token references instead of actual values."
+    },
+    {
+      "id": "tip-006",
+      "category": "database",
+      "title": "Add TTL to User Data Tables",
+      "description": "Database tables storing Meta user data must have expiry/TTL mechanism. Indefinite storage violates data retention policies.",
+      "severity": "warning",
+      "recommendation": "Add expires_at or ttl column and implement cleanup job to purge stale data"
+    },
+    {
+      "id": "tip-007",
+      "category": "caching",
+      "title": "Cache User Data Max 24 Hours",
+      "description": "Redis/memcached storing user profile data must expire within 24 hours per Meta requirements.",
+      "severity": "warning",
+      "recommendation": "Use EXPIRE or TTL of 86400 seconds (24h) max for user data cache entries"
+    },
+    {
+      "id": "tip-008",
+      "category": "cloud-storage",
+      "title": "User Media Must Be Deletable",
+      "description": "Any user-generated content stored in S3/GCS must be deletable within 30 days of user request.",
+      "severity": "warning",
+      "recommendation": "Implement deletion API and track user media with foreign keys to user accounts"
+    }
+  ],
+
+  "patterns": [
+    {
+      "id": "pattern-001",
+      "name": "Hardcoded App Secret",
+      "description": "App secrets should never be hardcoded in source code",
+      "regex": "app[_-]?secret\\s*[=:]\\s*['\"][a-f0-9]{32}['\"]",
+      "severity": "error",
+      "category": "security"
+    },
+    {
+      "id": "pattern-002",
+      "name": "Missing Webhook Verification",
+      "description": "Webhook endpoints without signature verification",
+      "regex": "webhook.*(?:post|handler)(?!.*(?:verify|signature|hmac|sha256))",
+      "severity": "error",
+      "category": "webhooks"
+    },
+    {
+      "id": "pattern-003",
+      "name": "Bulk Message Sending",
+      "description": "Sending messages in bulk/loops without rate limiting",
+      "regex": "for.*(?:send[_-]?message|post|dm).*(?!.*(?:delay|sleep|throttle|rate))",
+      "severity": "warning",
+      "category": "automation"
+    }
+  ],
+
+  "prompts": {
+    "data-handling": "Focus on ACTUAL data flow. Only flag if code clearly: 1) Sends user data to external non-Meta services, 2) Stores PII without any expiry mechanism visible, 3) Logs access tokens or passwords. Do NOT flag: returning data to users, internal processing, or code where storage/security is handled elsewhere.",
+
+    "webhooks": "For webhook code, only flag if there's NO signature verification anywhere in the handler chain. Look for: X-Hub-Signature-256, HMAC, crypto.timingSafeEqual. Many apps verify in middleware - check codebase context before flagging.",
+
+    "automation": "Only flag automation as violation if code has: 1) Infinite loops without delays, 2) Bulk messaging without any rate control. Do NOT flag: queued jobs, batch processors with delays, code using official SDKs (they handle rate limiting).",
+
+    "database": "For database code, only flag if: 1) Access tokens are stored as plain text in schema, 2) User data tables have no TTL/expiry and no cleanup mechanism anywhere. Consider that cleanup jobs may be separate from schema definitions.",
+
+    "data-retention": "Only flag clear violations: indefinite storage without any expiry. Many apps handle retention via: scheduled jobs, TTL columns, soft-delete with purge. Check codebase context before assuming no retention policy exists.",
+
+    "caching": "For cache operations, check if TTL is set. Most cache libraries default to expiry. Only flag if: 1) Explicit permanent storage (TTL=0 or no expiry), 2) Sensitive data in cache keys. Redis SETEX, cache.set with TTL are compliant.",
+
+    "cloud-storage": "For storage code, only flag if user content is stored with no deletion capability. Most storage services support deletion - focus on whether the app implements user data deletion requests, not just upload code.",
+
+    "credentials": "Only flag LITERAL hardcoded secrets (actual token strings). NOT violations: process.env.*, config.*, secrets from vault/AWS SSM, function parameters, encrypted values.",
+
+    "api-usage": "Standard Meta API calls are expected behavior. Only flag: 1) Undocumented/private endpoints, 2) Scraping HTML instead of using API, 3) Bypassing rate limits intentionally.",
+
+    "platform-api": "Using Instagram/Messenger/WhatsApp APIs is the intended use case. Only flag violations of specific platform rules like: automated DMs without user action, bulk unsolicited messages."
+  },
+
+  "bestPractices": [
+    {
+      "title": "Use Official SDKs When Available",
+      "description": "facebook-nodejs-business-sdk handles auth, rate limiting, and API versioning automatically"
+    },
+    {
+      "title": "Implement Graceful Degradation",
+      "description": "When API limits are hit, queue requests rather than failing completely"
+    },
+    {
+      "title": "Log API Responses (Not Tokens)",
+      "description": "Log response codes and error messages for debugging, but never log tokens or user data"
+    },
+    {
+      "title": "Version Your API Calls",
+      "description": "Always specify API version (e.g., v18.0) rather than using unversioned endpoints"
+    }
+  ],
+
+  "commonRejections": [
+    {
+      "reason": "Insufficient webhook security",
+      "solution": "Add X-Hub-Signature-256 verification to all webhook endpoints"
+    },
+    {
+      "reason": "Data retention policy violation",
+      "solution": "Implement 24-hour TTL and provide data deletion endpoint"
+    },
+    {
+      "reason": "Missing rate limit handling",
+      "solution": "Add exponential backoff and respect X-Business-Use-Case-Usage headers"
+    },
+    {
+      "reason": "Automated messaging without user consent",
+      "solution": "Only message users who explicitly opted in within 24-hour window"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "platform": "instagram",
+  "displayName": "Instagram",
+  "version": "1.0.0",
+  "policyUrl": "https://developers.facebook.com/docs/instagram-platform/policy",
+
+  "specificRules": [
+    {
+      "id": "IG_NO_AUTOMATED_DM",
+      "name": "No Automated DMs Without User Action",
+      "severity": "error",
+      "description": "Instagram prohibits sending automated DMs without explicit user-initiated action",
+      "detection": "Automated message sending without user trigger detection",
+      "recommendation": "Only send messages in response to user-initiated actions within 24-hour window",
+      "docUrl": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing"
+    },
+    {
+      "id": "IG_24HR_WINDOW",
+      "name": "24-Hour Messaging Window",
+      "severity": "error",
+      "description": "Can only message users within 24 hours of their last message to you",
+      "detection": "Message sending without timestamp/window validation",
+      "recommendation": "Track last user message time and only respond within 24-hour window"
+    },
+    {
+      "id": "IG_OFFICIAL_API_ONLY",
+      "name": "Use Official Instagram Graph API",
+      "severity": "error",
+      "description": "Must use official Instagram Graph API, not unofficial libraries or scraping",
+      "detection": "Unofficial Instagram libraries or direct web scraping",
+      "recommendation": "Use instagram-graph-api via facebook-nodejs-business-sdk",
+      "bannedPackages": ["instagram-private-api", "instagrapi", "instagram-web-api"]
+    },
+    {
+      "id": "IG_RATE_LIMITS",
+      "name": "Instagram API Rate Limits",
+      "severity": "warning",
+      "description": "Instagram has stricter rate limits than Facebook Graph API",
+      "limits": {
+        "contentPublishing": "25 posts per 24 hours",
+        "apiCalls": "200 calls per hour per user",
+        "hashtagSearch": "30 unique hashtags per 7 days"
+      },
+      "recommendation": "Implement rate limiting and respect X-Business-Use-Case-Usage header"
+    }
+  ],
+
+  "bestPractices": [
+    "Always use Instagram Graph API with Facebook Login (not Instagram Basic Display API for business features)",
+    "Store Instagram user IDs (IGSID) separately from Facebook PSIDs",
+    "Implement proper error handling for Instagram-specific error codes",
+    "Use Instagram webhooks for real-time updates instead of polling"
+  ],
+
+  "commonRejectionReasons": [
+    "Automated DMs without user opt-in",
+    "Using unofficial Instagram libraries",
+    "Exceeding content publishing limits",
+    "Missing privacy policy URL in app settings"
+  ]
+}

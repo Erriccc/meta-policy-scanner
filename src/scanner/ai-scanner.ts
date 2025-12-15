@@ -7,13 +7,26 @@
  * 1. Analyzes code semantically against indexed policy documentation
  * 2. Uses LLM (OpenAI/Claude) to evaluate potential violations
  * 3. Catches edge cases that regex patterns miss
+ *
+ * Configuration is loaded from knowledge/ directory:
+ * - meta-policies.json: Official Meta policy doc references
+ * - analysis-rules.json: What IS and IS NOT a violation
+ * - custom-rules.json: Project-specific tips and prompts
+ * - platforms/*.json: Platform-specific rules
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
 import { createEmbeddingProvider, type EmbeddingConfig } from '../embeddings';
 import type { EmbeddingProvider } from '../embeddings/types';
+import { createAutoLLMProvider, type LLMProvider } from '../llm';
 import { Violation, Platform, Severity } from '../types';
+import { CodebaseIndexer } from './codebase-indexer';
+import {
+  loadAnalysisRules,
+  getSuspiciousPatterns,
+  buildAnalysisPrompt,
+  getViolationDocUrls,
+} from '../knowledge';
 
 export interface AIAnalysisResult {
   isViolation: boolean;
@@ -30,8 +43,8 @@ export interface AIScannerConfig {
   supabaseUrl: string;
   supabaseKey: string;
   embeddingConfig: EmbeddingConfig;
-  openaiApiKey?: string;
-  anthropicApiKey?: string;
+  llmProvider?: LLMProvider;
+  codebaseIndex?: CodebaseIndexer;
   onProgress?: (msg: string) => void;
 }
 
@@ -41,40 +54,33 @@ export interface AIScanOptions {
   maxAnalysisPerFile?: number;
 }
 
-// Code patterns that warrant AI analysis (suspicious but not definitive)
-const SUSPICIOUS_PATTERNS = [
-  // Data handling that might violate policies
-  { pattern: /user(?:_)?(?:data|info|profile)/gi, category: 'data-handling', description: 'User data handling' },
-  { pattern: /(?:store|save|persist|cache).*(?:token|secret|credential)/gi, category: 'credentials', description: 'Credential storage' },
-  { pattern: /(?:share|send|transmit|export).*(?:user|data|personal)/gi, category: 'data-sharing', description: 'Data sharing' },
-  { pattern: /(?:scrape|crawl|extract|harvest)/gi, category: 'scraping', description: 'Data scraping' },
-  { pattern: /(?:automate|bot|automated)/gi, category: 'automation', description: 'Automation' },
-  { pattern: /(?:bulk|mass|batch).*(?:message|post|send)/gi, category: 'bulk-actions', description: 'Bulk messaging' },
-  { pattern: /(?:bypass|circumvent|workaround)/gi, category: 'circumvention', description: 'Policy circumvention' },
-  { pattern: /rate.?limit/gi, category: 'rate-limiting', description: 'Rate limiting handling' },
-  { pattern: /webhook.*(?:receive|handle|process)/gi, category: 'webhooks', description: 'Webhook handling' },
-  { pattern: /(?:graph|api)\.facebook\.com/gi, category: 'api-usage', description: 'Facebook API usage' },
-  { pattern: /(?:instagram|messenger|whatsapp).*(?:api|send|post)/gi, category: 'platform-api', description: 'Platform API usage' },
-];
+// Suspicious patterns are now loaded from knowledge/analysis-rules.json
+// Use getSuspiciousPatterns() to get the configured patterns
 
 export class AIScanner {
   private supabase: SupabaseClient;
   private embeddingProvider: EmbeddingProvider;
-  private openai?: OpenAI;
+  private llmProvider?: LLMProvider;
+  private codebaseIndex?: CodebaseIndexer;
   private onProgress?: (msg: string) => void;
 
   constructor(config: AIScannerConfig) {
     this.supabase = createClient(config.supabaseUrl, config.supabaseKey);
     this.embeddingProvider = createEmbeddingProvider(config.embeddingConfig);
     this.onProgress = config.onProgress;
-
-    if (config.openaiApiKey) {
-      this.openai = new OpenAI({ apiKey: config.openaiApiKey });
-    }
+    this.llmProvider = config.llmProvider;
+    this.codebaseIndex = config.codebaseIndex;
   }
 
   private log(msg: string) {
     this.onProgress?.(msg);
+  }
+
+  /**
+   * Set codebase index for enhanced context during analysis
+   */
+  setCodebaseIndex(index: CodebaseIndexer) {
+    this.codebaseIndex = index;
   }
 
   /**
@@ -87,7 +93,7 @@ export class AIScanner {
   ): Promise<Violation[]> {
     const violations: Violation[] = [];
     const lines = content.split('\n');
-    const minConfidence = options.minConfidence ?? 0.7;
+    const minConfidence = options.minConfidence ?? 0.85; // High threshold for clear violations
     const maxAnalysis = options.maxAnalysisPerFile ?? 10;
 
     // Find suspicious code sections
@@ -97,36 +103,53 @@ export class AIScanner {
       return violations;
     }
 
-    this.log(`  🤖 Found ${suspiciousSections.length} sections for AI analysis`);
+    this.log(`  🤖 Found ${suspiciousSections.length} suspicious sections (${suspiciousSections.map(s => s.category).join(', ')})`);
 
     // Limit analysis to prevent excessive API calls
     const sectionsToAnalyze = suspiciousSections.slice(0, maxAnalysis);
+
+    let sectionsWithPolicies = 0;
+    let llmAnalyzed = 0;
 
     for (const section of sectionsToAnalyze) {
       try {
         // Search for relevant policy documentation
         const relevantPolicies = await this.searchRelevantPolicies(section.context);
 
-        if (relevantPolicies.length === 0) continue;
+        if (relevantPolicies.length === 0) {
+          this.log(`    → No relevant policies found for ${section.category}`);
+          continue;
+        }
+        sectionsWithPolicies++;
 
         // Analyze with LLM if available
-        if (this.openai) {
+        if (this.llmProvider) {
+          llmAnalyzed++;
           const analysis = await this.analyzeWithLLM(section, relevantPolicies, options.platform);
 
-          if (analysis && analysis.isViolation && analysis.confidence >= minConfidence) {
-            violations.push({
-              ruleCode: analysis.ruleCode,
-              ruleName: analysis.ruleName,
-              severity: analysis.severity,
-              platform: options.platform || 'all',
-              file: filePath,
-              line: section.line,
-              column: section.column,
-              message: analysis.message,
-              codeSnippet: section.snippet,
-              recommendation: analysis.recommendation,
-              docUrls: analysis.relevantPolicy ? [analysis.relevantPolicy] : undefined,
-            });
+          if (analysis) {
+            if (analysis.isViolation && analysis.confidence >= minConfidence) {
+              this.log(`    ⚠️ AI violation: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
+              violations.push({
+                ruleCode: analysis.ruleCode,
+                ruleName: analysis.ruleName,
+                severity: analysis.severity,
+                platform: options.platform || 'all',
+                file: filePath,
+                line: section.line,
+                column: section.column,
+                message: analysis.message,
+                codeSnippet: section.snippet,
+                recommendation: analysis.recommendation,
+                docUrls: analysis.relevantPolicy ? [analysis.relevantPolicy] : undefined,
+              });
+            } else if (analysis.isViolation) {
+              this.log(`    ℹ️ Low confidence: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
+            } else {
+              this.log(`    ✓ Compliant: ${section.category}`);
+            }
+          } else {
+            this.log(`    ✗ LLM returned no analysis for ${section.category}`);
           }
         } else {
           // Fallback: Use semantic similarity only (no LLM)
@@ -176,10 +199,13 @@ export class AIScanner {
       description: string;
     }> = [];
 
+    // Load patterns from knowledge config (once, outside loop)
+    const suspiciousPatterns = getSuspiciousPatterns();
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      for (const { pattern, category, description } of SUSPICIOUS_PATTERNS) {
+      for (const { pattern, category, description } of suspiciousPatterns) {
         const match = pattern.exec(line);
         if (match) {
           // Get surrounding context (5 lines before and after)
@@ -258,68 +284,132 @@ export class AIScanner {
 
   /**
    * Analyze code with LLM for policy violations
+   * Prompt is built dynamically from knowledge/ config files
    */
   private async analyzeWithLLM(
-    section: { snippet: string; context: string; category: string; description: string },
+    section: { snippet: string; context: string; category: string; description: string; line: number },
     relevantPolicies: Array<{ chunk_text: string; similarity: number; policy_url?: string }>,
     platform?: Platform
   ): Promise<AIAnalysisResult | null> {
-    if (!this.openai) return null;
+    if (!this.llmProvider) return null;
 
+    // Build policy context from RAG results
     const policyContext = relevantPolicies
       .map(p => p.chunk_text.substring(0, 500))
       .join('\n\n---\n\n');
 
-    const prompt = `You are a Meta API policy compliance expert. Analyze this code for potential policy violations.
+    // Build analysis guidelines from knowledge files
+    // This pulls from: analysis-rules.json, custom-rules.json, platforms/*.json
+    const knowledgeContext = buildAnalysisPrompt(section.category, platform);
 
-## Code Context
+    // Build codebase context from indexer
+    let codebaseContext = '';
+    if (this.codebaseIndex) {
+      codebaseContext = this.buildCodebaseContext(section.category);
+    }
+
+    // Load analysis rules for valid rule codes
+    const analysisRules = loadAnalysisRules();
+    const validRuleCodes = analysisRules
+      ? Object.values(analysisRules.violationTypes).map(v => v.id).join(', ')
+      : 'AI_HARDCODED_SECRET, AI_DATA_SHARING, AI_DATA_RETENTION, AI_AUTOMATION_ABUSE, AI_POLICY_CIRCUMVENTION, AI_SECURITY_ISSUE';
+
+    // Build the prompt - code context is always included, guidelines come from config
+    const prompt = `You are a Meta Platform API policy compliance analyst. Analyze this code for policy violations.
+
+## Code to Analyze (Line ${section.line})
+\`\`\`
+${section.snippet}
+\`\`\`
+
+## Surrounding Context
 \`\`\`
 ${section.context}
 \`\`\`
 
-## Relevant Meta Policies
-${policyContext}
+## Retrieved Policy Documentation
+${policyContext || 'No specific policy docs retrieved for this code.'}
 
-## Analysis Request
-Determine if this code violates any Meta Platform policies. Consider:
-1. Data handling and privacy requirements
-2. API usage restrictions
-3. Automation and rate limiting rules
-4. Platform-specific requirements (${platform || 'all platforms'})
+${knowledgeContext}
 
-Respond in JSON format:
-{
-  "isViolation": boolean,
-  "confidence": number (0-1),
-  "ruleCode": "string (e.g., AI_DATA_HANDLING)",
-  "ruleName": "string (human readable name)",
-  "severity": "error" | "warning" | "info",
-  "message": "string (explanation)",
-  "recommendation": "string (how to fix)"
-}
+${codebaseContext}
 
-If no violation is found, set isViolation to false with confidence of why it's compliant.`;
+## Response Format (JSON only)
+Return a JSON object with these fields:
+- isViolation: boolean - true only if there's a CLEAR violation
+- confidence: number (0.0-1.0) - use 0.85+ only for definite violations
+- ruleCode: string - one of: ${validRuleCodes}
+- ruleName: string - human readable violation name
+- severity: "error" | "warning" | "info"
+- message: string - describe the specific violation with quoted code
+- recommendation: string - how to fix the issue
+
+If no violation found:
+{"isViolation": false, "confidence": 0, "ruleCode": "", "ruleName": "", "severity": "info", "message": "", "recommendation": ""}`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 500,
-        temperature: 0.2,
-      });
-
-      const content = response.choices[0]?.message?.content;
+      const content = await this.llmProvider.analyze(prompt);
       if (!content) return null;
 
       const result = JSON.parse(content) as AIAnalysisResult;
-      result.relevantPolicy = relevantPolicies[0]?.policy_url;
+
+      // Add doc URLs from knowledge config based on rule code
+      if (result.isViolation && result.ruleCode) {
+        const docUrls = getViolationDocUrls(result.ruleCode);
+        if (docUrls.length > 0) {
+          result.relevantPolicy = docUrls[0];
+        } else {
+          result.relevantPolicy = relevantPolicies[0]?.policy_url;
+        }
+      }
 
       return result;
     } catch (error) {
       this.log(`  ⚠️ LLM analysis error: ${error instanceof Error ? error.message : 'Unknown'}`);
       return null;
     }
+  }
+
+  /**
+   * Build codebase context for a given category
+   */
+  private buildCodebaseContext(category: string): string {
+    if (!this.codebaseIndex) return '';
+
+    let context = '';
+
+    // Get codebase structure summary
+    const summary = this.codebaseIndex.getSummaryForAI();
+    context += `\n## Codebase Structure\n${summary}\n`;
+
+    // Map categories to relevant code patterns
+    const categoryPatterns: Record<string, Array<'auth' | 'rateLimit' | 'permissions' | 'middleware' | 'errorHandler' | 'database' | 'cache' | 'storage'>> = {
+      'credentials': ['auth'],
+      'data-handling': ['auth', 'database'],
+      'api-usage': ['auth', 'rateLimit'],
+      'rate-limiting': ['rateLimit'],
+      'bulk-actions': ['rateLimit'],
+      'database': ['database'],
+      'data-retention': ['database', 'cache'],
+      'caching': ['cache'],
+      'cloud-storage': ['storage'],
+      'webhooks': ['middleware', 'auth'],
+    };
+
+    const patterns = categoryPatterns[category] || [];
+
+    for (const pattern of patterns) {
+      const relatedCode = this.codebaseIndex.findPatternUsage(pattern);
+      if (relatedCode.length > 0) {
+        const patternName = pattern.charAt(0).toUpperCase() + pattern.slice(1);
+        context += `\n## Related ${patternName} Code\n`;
+        relatedCode.slice(0, 2).forEach(code => {
+          context += `**${code.file}:${code.line}**\n\`\`\`\n${code.snippet}\n\`\`\`\n\n`;
+        });
+      }
+    }
+
+    return context;
   }
 
   /**
@@ -361,20 +451,22 @@ If no violation is found, set isViolation to false with confidence of why it's c
   /**
    * Check if AI scanning is fully configured
    */
-  isFullyConfigured(): { rag: boolean; llm: boolean } {
+  isFullyConfigured(): { rag: boolean; llm: boolean; llmProvider?: string } {
     return {
       rag: true, // Always available if we have embeddings
-      llm: !!this.openai,
+      llm: !!this.llmProvider,
+      llmProvider: this.llmProvider?.name,
     };
   }
 }
 
 /**
  * Create AI scanner from environment variables
+ * Uses auto-detection for LLM provider (Groq > OpenAI > Ollama)
  */
-export function createAIScanner(
+export async function createAIScanner(
   onProgress?: (msg: string) => void
-): AIScanner | null {
+): Promise<AIScanner | null> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_ANON_KEY;
   const voyageKey = process.env.VOYAGE_API_KEY;
@@ -383,6 +475,9 @@ export function createAIScanner(
     return null;
   }
 
+  // Auto-detect LLM provider (Groq free tier > OpenAI > Ollama)
+  const llmProvider = await createAutoLLMProvider();
+
   return new AIScanner({
     supabaseUrl,
     supabaseKey,
@@ -390,8 +485,7 @@ export function createAIScanner(
       provider: 'voyage',
       apiKey: voyageKey,
     },
-    openaiApiKey: process.env.OPENAI_API_KEY,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    llmProvider: llmProvider || undefined,
     onProgress,
   });
 }

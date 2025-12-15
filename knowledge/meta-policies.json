@@ -1,0 +1,107 @@
+{
+  "$schema": "./schemas/meta-policies.schema.json",
+  "version": "1.0.0",
+  "description": "Official Meta Platform policy references - update when policies change",
+  "lastUpdated": "2024-12-15",
+
+  "policyDocs": {
+    "platformTerms": {
+      "title": "Meta Platform Terms",
+      "url": "https://developers.facebook.com/terms/",
+      "description": "Core terms all Meta API users must follow"
+    },
+    "developerPolicies": {
+      "title": "Meta Developer Policies",
+      "url": "https://developers.facebook.com/devpolicy/",
+      "description": "Comprehensive policies for app developers"
+    },
+    "dataUse": {
+      "title": "Platform Data Use Policy",
+      "url": "https://developers.facebook.com/docs/development/data-policy/",
+      "description": "How to handle user data from Meta APIs"
+    },
+    "rateLimiting": {
+      "title": "Rate Limiting Documentation",
+      "url": "https://developers.facebook.com/docs/graph-api/overview/rate-limiting/",
+      "description": "API rate limits and best practices"
+    },
+    "webhooks": {
+      "title": "Webhooks Getting Started",
+      "url": "https://developers.facebook.com/docs/graph-api/webhooks/getting-started",
+      "description": "Webhook setup and security requirements"
+    },
+    "webhookSecurity": {
+      "title": "Webhook Security",
+      "url": "https://developers.facebook.com/docs/graph-api/webhooks/getting-started#verification-requests",
+      "description": "X-Hub-Signature verification requirements"
+    },
+    "accessTokens": {
+      "title": "Access Token Security",
+      "url": "https://developers.facebook.com/docs/facebook-login/security/",
+      "description": "Securing and handling access tokens"
+    },
+    "dataRetention": {
+      "title": "Data Deletion Requirements",
+      "url": "https://developers.facebook.com/docs/development/release/data-deletion/",
+      "description": "User data deletion and retention policies"
+    },
+    "instagramApi": {
+      "title": "Instagram Platform Policy",
+      "url": "https://developers.facebook.com/docs/instagram-platform/policy",
+      "description": "Instagram-specific API policies"
+    },
+    "instagramMessaging": {
+      "title": "Instagram Messaging Policy",
+      "url": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing",
+      "description": "Rules for Instagram DMs and messaging"
+    },
+    "messengerPolicy": {
+      "title": "Messenger Platform Policy",
+      "url": "https://developers.facebook.com/docs/messenger-platform/policy",
+      "description": "Messenger bot and messaging policies"
+    },
+    "whatsappPolicy": {
+      "title": "WhatsApp Business Policy",
+      "url": "https://developers.facebook.com/docs/whatsapp/overview/policy",
+      "description": "WhatsApp Business API policies"
+    },
+    "appReview": {
+      "title": "App Review Requirements",
+      "url": "https://developers.facebook.com/docs/app-review/",
+      "description": "Requirements for app approval"
+    },
+    "permissions": {
+      "title": "Permissions Reference",
+      "url": "https://developers.facebook.com/docs/permissions/reference/",
+      "description": "Available permissions and their requirements"
+    }
+  },
+
+  "requirements": {
+    "dataHandling": {
+      "maxCacheDuration": "24 hours",
+      "deletionTimeframe": "30 days",
+      "mustProvide": ["data export", "data deletion endpoint"],
+      "prohibited": ["selling user data", "sharing with unauthorized third parties"],
+      "docs": ["dataUse", "dataRetention"]
+    },
+    "security": {
+      "webhookSignature": "X-Hub-Signature-256 (HMAC-SHA256)",
+      "tokenStorage": "Never in code, logs, or client-side",
+      "encryption": "TLS 1.2+ for all API calls",
+      "docs": ["webhookSecurity", "accessTokens"]
+    },
+    "messaging": {
+      "windowDuration": "24 hours from last user message",
+      "requiresUserAction": true,
+      "bulkMessagingProhibited": true,
+      "docs": ["instagramMessaging", "messengerPolicy"]
+    },
+    "automation": {
+      "rateLimitHandling": "required",
+      "exponentialBackoff": "required on 429 errors",
+      "respectHeaders": ["X-Business-Use-Case-Usage", "X-App-Usage"],
+      "docs": ["rateLimiting"]
+    }
+  }
+}

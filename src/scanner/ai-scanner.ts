@@ -370,8 +370,17 @@ If no violation found (this is the expected case for most code):
 {"isViolation": false, "confidence": 0, "ruleCode": "", "ruleName": "", "severity": "info", "message": "", "recommendation": ""}`;
 
     try {
-      const content = await this.llmProvider.analyze(prompt);
+      let content = await this.llmProvider.analyze(prompt);
       if (!content) return null;
+
+      // Strip markdown code fences if present (Claude often wraps JSON in ```json ... ```)
+      content = content.trim();
+      if (content.startsWith('```')) {
+        // Remove opening fence (```json or ```)
+        content = content.replace(/^```(?:json)?\s*\n?/, '');
+        // Remove closing fence
+        content = content.replace(/\n?```\s*$/, '');
+      }
 
       const result = JSON.parse(content) as AIAnalysisResult;
 

@@ -104,7 +104,16 @@ export class AIScanner {
       return violations;
     }
 
-    this.log(`  🤖 AI: ${suspiciousSections.length} suspicious sections in ${filePath.split('/').pop()}`);
+    const fileName = filePath.split('/').pop();
+    this.log(`  🤖 AI: ${suspiciousSections.length} suspicious sections in ${fileName}`);
+
+    // Log each suspicious section with details
+    for (const s of suspiciousSections.slice(0, 5)) { // Show first 5
+      this.log(`      L${s.line}: [${s.category}] ${s.snippet.substring(0, 60)}${s.snippet.length > 60 ? '...' : ''}`);
+    }
+    if (suspiciousSections.length > 5) {
+      this.log(`      ... and ${suspiciousSections.length - 5} more`);
+    }
 
     // Limit analysis to prevent excessive API calls
     const sectionsToAnalyze = suspiciousSections.slice(0, maxAnalysis);
@@ -118,7 +127,7 @@ export class AIScanner {
         const relevantPolicies = await this.searchRelevantPolicies(section.context);
 
         if (relevantPolicies.length === 0) {
-          this.log(`    → No relevant policies found for ${section.category}`);
+          this.log(`    → L${section.line} [${section.category}]: No matching policies`);
           continue;
         }
         sectionsWithPolicies++;
@@ -130,7 +139,8 @@ export class AIScanner {
 
           if (analysis) {
             if (analysis.isViolation && analysis.confidence >= minConfidence) {
-              this.log(`    ⚠️ AI violation: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
+              this.log(`    ⚠️ L${section.line} VIOLATION: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
+              this.log(`       "${section.snippet.substring(0, 50)}..."`);
               violations.push({
                 ruleCode: analysis.ruleCode,
                 ruleName: analysis.ruleName,
@@ -145,12 +155,12 @@ export class AIScanner {
                 docUrls: analysis.relevantPolicy ? [analysis.relevantPolicy] : undefined,
               });
             } else if (analysis.isViolation) {
-              this.log(`    ℹ️ Low confidence: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
+              this.log(`    ℹ️ L${section.line} Low confidence: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
             } else {
-              this.log(`    ✓ Compliant: ${section.category}`);
+              this.log(`    ✓ L${section.line} [${section.category}]: Compliant`);
             }
           } else {
-            this.log(`    ✗ LLM returned no analysis for ${section.category}`);
+            this.log(`    ✗ L${section.line} [${section.category}]: No LLM response`);
           }
         } else {
           // Fallback: Use semantic similarity only (no LLM)

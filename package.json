@@ -1,6 +1,6 @@
 {
   "name": "meta-policy-scanner",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Scan codebases for Meta API policy violations",
   "main": "dist/index.js",
   "bin": {

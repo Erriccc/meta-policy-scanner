@@ -3,10 +3,10 @@
  * Inspired by PocketFlow's approach: https://github.com/The-Pocket/PocketFlow-Tutorial-Codebase-Knowledge
  */
 
-import { ScanResult, Violation, SDKAnalysis } from '../types';
+import { ScanResult, Violation, SDKAnalysis, AIAnalysisSummary, SuspiciousSection } from '../types';
 import { SDKDetector, detectMetaPackages } from './sdk-detector';
 import { BUNDLED_RULES } from '../policies/bundled-policies';
-import { createAIScanner, AIScanner } from './ai-scanner';
+import { createAIScanner, AIScanner, AnalyzedSection } from './ai-scanner';
 import { createCodebaseIndex, CodebaseIndexer } from './codebase-indexer';
 
 interface GitHubFile {
@@ -32,6 +32,9 @@ const SCANNABLE_EXTENSIONS = [
   '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
   '.py', '.php', '.java', '.rb', '.go',
   '.json',  // For package.json detection
+  '.sql',   // Database schemas
+  '.prisma', // Prisma ORM schemas
+  '.graphql', '.gql', // GraphQL schemas
 ];
 
 const DEFAULT_EXCLUDE = [
@@ -143,6 +146,7 @@ export class GitHubApiScanner {
     await this.initAIScanner();
 
     const violations: Violation[] = [];
+    const allSections: AnalyzedSection[] = [];
     const sdkDetector = new SDKDetector();
     const sdkAnalysis: SDKAnalysis = {
       official: [],
@@ -277,11 +281,12 @@ export class GitHubApiScanner {
         // AI-powered detection (if enabled)
         if (this.aiScanner) {
           try {
-            const aiViolations = await this.aiScanner.analyzeFile(file.path, content, {
+            const aiResult = await this.aiScanner.analyzeFileDetailed(file.path, content, {
               maxAnalysisPerFile: 5,
               minConfidence: 0.7,
             });
-            violations.push(...aiViolations);
+            violations.push(...aiResult.violations);
+            allSections.push(...aiResult.sections);
           } catch (aiError) {
             // AI analysis is optional, don't fail the scan
             this.log(`  ⚠️ AI analysis skipped: ${aiError instanceof Error ? aiError.message : 'Unknown error'}`);
@@ -301,6 +306,30 @@ export class GitHubApiScanner {
     // Deduplicate violations
     const uniqueViolations = this.deduplicateViolations(violations);
 
+    // Build AI analysis summary if we have sections
+    let aiAnalysis: AIAnalysisSummary | undefined;
+    if (allSections.length > 0) {
+      const suspiciousSections: SuspiciousSection[] = allSections.map(s => ({
+        file: s.file,
+        line: s.line,
+        column: s.column,
+        snippet: s.snippet,
+        category: s.category,
+        description: s.description,
+        status: s.status === 'low_confidence' ? 'pending' : s.status,
+        analysisResult: s.analysisResult,
+      }));
+
+      aiAnalysis = {
+        totalSuspicious: allSections.length,
+        analyzed: allSections.filter(s => s.status !== 'low_confidence').length,
+        compliant: allSections.filter(s => s.status === 'compliant').length,
+        violations: allSections.filter(s => s.status === 'violation').length,
+        noPolicyMatch: allSections.filter(s => s.status === 'no_policy').length,
+        sections: suspiciousSections,
+      };
+    }
+
     return {
       source: {
         type: 'github',
@@ -313,6 +342,7 @@ export class GitHubApiScanner {
       scanDuration: Date.now() - startTime,
       violations: uniqueViolations,
       sdkAnalysis,
+      aiAnalysis,
       summary: {
         errors: uniqueViolations.filter(v => v.severity === 'error').length,
         warnings: uniqueViolations.filter(v => v.severity === 'warning').length,

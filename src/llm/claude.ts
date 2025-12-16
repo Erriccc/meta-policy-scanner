@@ -73,10 +73,37 @@ export class ClaudeProvider implements LLMProvider {
   }
 
   /**
+   * Check if error is retryable (transient)
+   */
+  private isRetryableError(error: unknown): boolean {
+    // Rate limit errors
+    if (error instanceof Anthropic.RateLimitError) return true;
+
+    // API errors with retryable status codes
+    if (error instanceof Anthropic.APIError) {
+      const status = error.status;
+      // 429 = rate limit, 529 = overloaded, 500/502/503/504 = server errors
+      return status === 429 || status === 529 || (status >= 500 && status <= 504);
+    }
+
+    // Check error message for common transient issues
+    if (error instanceof Error) {
+      const msg = error.message.toLowerCase();
+      return msg.includes('overloaded') ||
+             msg.includes('rate limit') ||
+             msg.includes('529') ||
+             msg.includes('timeout') ||
+             msg.includes('econnreset');
+    }
+
+    return false;
+  }
+
+  /**
    * Make API request with retry logic
    */
   private async makeRequest(prompt: string, attempt: number = 0): Promise<string> {
-    const maxAttempts = 3;
+    const maxAttempts = 5; // Increased for transient errors
 
     await this.waitForRateLimit();
     this.lastRequestTime = Date.now();
@@ -102,14 +129,20 @@ export class ClaudeProvider implements LLMProvider {
 
       return textContent.text;
     } catch (error) {
-      // Handle rate limit errors with backoff
-      if (error instanceof Anthropic.RateLimitError) {
-        if (attempt >= maxAttempts) {
-          throw new Error('Claude rate limit exceeded after max retries');
-        }
+      // Handle retryable errors with exponential backoff
+      if (this.isRetryableError(error) && attempt < maxAttempts) {
+        const baseWait = error instanceof Anthropic.APIError && error.status === 529
+          ? 5000  // Longer wait for overloaded (5s base)
+          : 2000; // Standard wait (2s base)
 
-        const waitTime = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
-        await this.sleep(Math.min(waitTime, 30000));
+        const waitTime = Math.pow(2, attempt) * baseWait;
+        const cappedWait = Math.min(waitTime, 60000); // Max 60s
+
+        // Log retry attempt
+        const errorInfo = error instanceof Error ? error.message : 'Unknown';
+        console.log(`  ⏳ Claude retry ${attempt + 1}/${maxAttempts} after ${cappedWait/1000}s (${errorInfo})`);
+
+        await this.sleep(cappedWait);
         return this.makeRequest(prompt, attempt + 1);
       }
 

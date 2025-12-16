@@ -87,12 +87,33 @@ export interface SDKAnalysis {
   violations: SDKDetection[];
 }
 
+export interface SuspiciousSection {
+  file: string;
+  line: number;
+  column: number;
+  snippet: string;
+  category: string;
+  description: string;
+  status: 'compliant' | 'violation' | 'no_policy' | 'pending';
+  analysisResult?: string;
+}
+
+export interface AIAnalysisSummary {
+  totalSuspicious: number;
+  analyzed: number;
+  compliant: number;
+  violations: number;
+  noPolicyMatch: number;
+  sections: SuspiciousSection[];
+}
+
 export interface ScanResult {
   source: ScanSource;
   filesScanned: number;
   scanDuration: number;
   violations: Violation[];
   sdkAnalysis?: SDKAnalysis;
+  aiAnalysis?: AIAnalysisSummary;
   summary: {
     errors: number;
     warnings: number;

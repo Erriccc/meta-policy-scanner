@@ -54,6 +54,22 @@ export interface AIScanOptions {
   maxAnalysisPerFile?: number;
 }
 
+export interface AnalyzedSection {
+  file: string;
+  line: number;
+  column: number;
+  snippet: string;
+  category: string;
+  description: string;
+  status: 'compliant' | 'violation' | 'no_policy' | 'low_confidence';
+  analysisResult?: string;
+}
+
+export interface AIFileAnalysisResult {
+  violations: Violation[];
+  sections: AnalyzedSection[];
+}
+
 // Suspicious patterns are now loaded from knowledge/analysis-rules.json
 // Use getSuspiciousPatterns() to get the configured patterns
 
@@ -85,13 +101,27 @@ export class AIScanner {
 
   /**
    * Analyze a code file for policy violations using AI
+   * Returns only violations (for backward compatibility)
    */
   async analyzeFile(
     filePath: string,
     content: string,
     options: AIScanOptions = {}
   ): Promise<Violation[]> {
+    const result = await this.analyzeFileDetailed(filePath, content, options);
+    return result.violations;
+  }
+
+  /**
+   * Analyze a code file with full details including all suspicious sections
+   */
+  async analyzeFileDetailed(
+    filePath: string,
+    content: string,
+    options: AIScanOptions = {}
+  ): Promise<AIFileAnalysisResult> {
     const violations: Violation[] = [];
+    const analyzedSections: AnalyzedSection[] = [];
     const lines = content.split('\n');
     const minConfidence = options.minConfidence ?? 0.85; // High threshold for clear violations
     const maxAnalysis = options.maxAnalysisPerFile ?? 10;
@@ -101,7 +131,7 @@ export class AIScanner {
 
     if (suspiciousSections.length === 0) {
       // No suspicious patterns found - this is normal for most files
-      return violations;
+      return { violations, sections: [] };
     }
 
     const fileName = filePath.split('/').pop();
@@ -118,29 +148,35 @@ export class AIScanner {
     // Limit analysis to prevent excessive API calls
     const sectionsToAnalyze = suspiciousSections.slice(0, maxAnalysis);
 
-    let sectionsWithPolicies = 0;
-    let llmAnalyzed = 0;
-
     for (const section of sectionsToAnalyze) {
+      const analyzedSection: AnalyzedSection = {
+        file: filePath,
+        line: section.line,
+        column: section.column,
+        snippet: section.snippet,
+        category: section.category,
+        description: section.description,
+        status: 'no_policy', // Will be updated after analysis
+      };
+
       try {
-        // Search for relevant policy documentation
+        // Search for relevant policy documentation (optional - LLM can still analyze without RAG)
         const relevantPolicies = await this.searchRelevantPolicies(section.context);
 
         if (relevantPolicies.length === 0) {
-          this.log(`    → L${section.line} [${section.category}]: No matching policies`);
-          continue;
+          this.log(`    → L${section.line} [${section.category}]: No RAG matches, using LLM only`);
         }
-        sectionsWithPolicies++;
 
-        // Analyze with LLM if available
+        // Analyze with LLM if available (works with or without RAG results)
         if (this.llmProvider) {
-          llmAnalyzed++;
           const analysis = await this.analyzeWithLLM(section, relevantPolicies, options.platform);
 
           if (analysis) {
             if (analysis.isViolation && analysis.confidence >= minConfidence) {
               this.log(`    ⚠️ L${section.line} VIOLATION: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
               this.log(`       "${section.snippet.substring(0, 50)}..."`);
+              analyzedSection.status = 'violation';
+              analyzedSection.analysisResult = `${analysis.ruleName}: ${analysis.message}`;
               violations.push({
                 ruleCode: analysis.ruleCode,
                 ruleName: analysis.ruleName,
@@ -156,16 +192,24 @@ export class AIScanner {
               });
             } else if (analysis.isViolation) {
               this.log(`    ℹ️ L${section.line} Low confidence: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}%)`);
+              analyzedSection.status = 'low_confidence';
+              analyzedSection.analysisResult = `Possible: ${analysis.ruleName} (${Math.round(analysis.confidence * 100)}% confidence)`;
             } else {
               this.log(`    ✓ L${section.line} [${section.category}]: Compliant`);
+              analyzedSection.status = 'compliant';
+              analyzedSection.analysisResult = 'No policy violation detected';
             }
           } else {
             this.log(`    ✗ L${section.line} [${section.category}]: No LLM response`);
+            analyzedSection.status = 'no_policy';
+            analyzedSection.analysisResult = 'LLM analysis failed';
           }
         } else {
           // Fallback: Use semantic similarity only (no LLM)
           const highSimilarityMatch = relevantPolicies.find(p => p.similarity > 0.8);
           if (highSimilarityMatch && this.looksLikeViolation(section, highSimilarityMatch)) {
+            analyzedSection.status = 'violation';
+            analyzedSection.analysisResult = `Semantic match: ${highSimilarityMatch.chunk_text.substring(0, 100)}...`;
             violations.push({
               ruleCode: 'AI_POLICY_MATCH',
               ruleName: `Potential Policy Violation (${section.category})`,
@@ -179,15 +223,22 @@ export class AIScanner {
               recommendation: 'Review this code against Meta Platform Terms and ensure compliance.',
               docUrls: highSimilarityMatch.policy_url ? [highSimilarityMatch.policy_url] : undefined,
             });
+          } else {
+            analyzedSection.status = 'compliant';
+            analyzedSection.analysisResult = 'No strong policy match';
           }
         }
+        analyzedSections.push(analyzedSection);
       } catch (error) {
         // Log but don't fail on individual analysis errors
         this.log(`  ⚠️ AI analysis error: ${error instanceof Error ? error.message : 'Unknown'}`);
+        analyzedSection.status = 'no_policy';
+        analyzedSection.analysisResult = `Error: ${error instanceof Error ? error.message : 'Unknown'}`;
+        analyzedSections.push(analyzedSection);
       }
     }
 
-    return violations;
+    return { violations, sections: analyzedSections };
   }
 
   /**
@@ -383,16 +434,14 @@ If no violation found (this is the expected case for most code):
       let content = await this.llmProvider.analyze(prompt);
       if (!content) return null;
 
-      // Strip markdown code fences if present (Claude often wraps JSON in ```json ... ```)
-      content = content.trim();
-      if (content.startsWith('```')) {
-        // Remove opening fence (```json or ```)
-        content = content.replace(/^```(?:json)?\s*\n?/, '');
-        // Remove closing fence
-        content = content.replace(/\n?```\s*$/, '');
+      // Extract JSON from the response (handles various LLM output formats)
+      const jsonContent = this.extractJsonFromResponse(content);
+      if (!jsonContent) {
+        this.log(`    ⚠️ Could not extract JSON from LLM response`);
+        return null;
       }
 
-      const result = JSON.parse(content) as AIAnalysisResult;
+      const result = JSON.parse(jsonContent) as AIAnalysisResult;
 
       // Add doc URLs from knowledge config based on rule code
       if (result.isViolation && result.ruleCode) {
@@ -409,6 +458,81 @@ If no violation found (this is the expected case for most code):
       this.log(`  ⚠️ LLM analysis error: ${error instanceof Error ? error.message : 'Unknown'}`);
       return null;
     }
+  }
+
+  /**
+   * Extract JSON from LLM response, handling various formats:
+   * - Raw JSON
+   * - JSON in markdown code fences
+   * - JSON with surrounding text
+   */
+  private extractJsonFromResponse(content: string): string | null {
+    if (!content) return null;
+
+    content = content.trim();
+
+    // Try 1: Direct JSON parse (already valid JSON)
+    if (content.startsWith('{')) {
+      try {
+        JSON.parse(content);
+        return content;
+      } catch {
+        // Not valid, continue to other methods
+      }
+    }
+
+    // Try 2: Extract from markdown code fences
+    const fenceMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (fenceMatch) {
+      const extracted = fenceMatch[1].trim();
+      try {
+        JSON.parse(extracted);
+        return extracted;
+      } catch {
+        // Not valid JSON in fence
+      }
+    }
+
+    // Try 3: Find JSON object anywhere in response
+    const jsonMatch = content.match(/\{[\s\S]*"isViolation"[\s\S]*\}/);
+    if (jsonMatch) {
+      let jsonStr = jsonMatch[0];
+
+      // Handle nested braces - find the balanced closing brace
+      let depth = 0;
+      let endIndex = 0;
+      for (let i = 0; i < jsonStr.length; i++) {
+        if (jsonStr[i] === '{') depth++;
+        if (jsonStr[i] === '}') depth--;
+        if (depth === 0) {
+          endIndex = i + 1;
+          break;
+        }
+      }
+
+      if (endIndex > 0) {
+        jsonStr = jsonStr.substring(0, endIndex);
+        try {
+          JSON.parse(jsonStr);
+          return jsonStr;
+        } catch {
+          // Still not valid
+        }
+      }
+    }
+
+    // Try 4: Look for any JSON object
+    const anyJsonMatch = content.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
+    if (anyJsonMatch) {
+      try {
+        JSON.parse(anyJsonMatch[0]);
+        return anyJsonMatch[0];
+      } catch {
+        // Not valid
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -431,10 +555,16 @@ If no violation found (this is the expected case for most code):
       'rate-limiting': ['rateLimit'],
       'bulk-actions': ['rateLimit'],
       'database': ['database'],
+      'database-schema': ['database'],
+      'database-ops': ['database'],
+      'orm-schema': ['database'],
+      'data-model': ['database'],
       'data-retention': ['database', 'cache'],
       'caching': ['cache'],
       'cloud-storage': ['storage'],
       'webhooks': ['middleware', 'auth'],
+      'platform-api': ['auth', 'rateLimit'],
+      'data-sharing': ['database', 'auth'],
     };
 
     const patterns = categoryPatterns[category] || [];

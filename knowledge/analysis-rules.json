@@ -149,6 +149,32 @@
         "Customer service responses"
       ],
       "docs": ["instagramMessaging", "messengerPolicy", "whatsappPolicy"]
+    },
+
+    "dataStorageViolation": {
+      "id": "AI_DATA_STORAGE",
+      "name": "Data Storage Violation",
+      "severity": "warning",
+      "description": "Storing Meta user data in ways that may violate platform policies",
+      "isViolation": [
+        "Database tables storing raw user PII without encryption",
+        "Schema storing access_token or app_secret in plain text columns",
+        "Tables with user_email, user_phone without clear retention policy",
+        "Storing user profile data (fb_id, ig_id) without TTL or cleanup mechanism",
+        "Database schema with no apparent data deletion capability",
+        "Caching user tokens/secrets without expiry",
+        "Storing conversation/message history indefinitely"
+      ],
+      "notViolation": [
+        "Schema with TTL columns or expiry timestamps",
+        "Tables with soft_delete or deleted_at columns",
+        "Encrypted credential storage (encrypted_token, secret_hash)",
+        "Audit tables with clear retention period comments",
+        "Reference tables (platforms, settings) without user data",
+        "Storing only anonymized/aggregated user metrics",
+        "Schema for app's own data (rules, configurations)"
+      ],
+      "docs": ["dataRetention", "dataUse", "developerPolicies"]
     }
   },
 
@@ -193,7 +219,23 @@
       {"pattern": "(?:createTable|CREATE TABLE|schema\\s*=)", "category": "database", "description": "Database schema"},
       {"pattern": "(?:retention|ttl|expire|delete.*after)", "category": "data-retention", "description": "Data retention"},
       {"pattern": "(?:s3|gcs|blob|storage).*(?:upload|put|store)", "category": "cloud-storage", "description": "Cloud storage"},
-      {"pattern": "(?:redis|memcache|cache).*(?:set|store|save)", "category": "caching", "description": "Caching"}
+      {"pattern": "(?:redis|memcache|cache).*(?:set|store|save)", "category": "caching", "description": "Caching"},
+
+      {"pattern": "CREATE\\s+TABLE.*(?:user|profile|account|customer)", "category": "database-schema", "description": "User table creation"},
+      {"pattern": "(?:fb_id|ig_id|facebook_id|instagram_id|psid|user_id)\\s+(?:text|varchar|int|bigint)", "category": "database-schema", "description": "Meta user ID column"},
+      {"pattern": "(?:access_token|app_secret|api_key)\\s+(?:text|varchar)", "category": "database-schema", "description": "Token/secret column without encryption"},
+      {"pattern": "(?:email|phone|address|location)\\s+(?:text|varchar)", "category": "database-schema", "description": "PII column definition"},
+      {"pattern": "model\\s+\\w+.*\\{[^}]*(?:facebook|instagram|messenger|whatsapp)", "category": "orm-schema", "description": "Prisma/ORM model with Meta data"},
+      {"pattern": "@db\\.(?:Text|VarChar).*(?:token|secret|key)", "category": "orm-schema", "description": "Prisma credential field"},
+      {"pattern": "sequelize\\.define.*(?:user|profile|token)", "category": "orm-schema", "description": "Sequelize model definition"},
+      {"pattern": "@Entity.*(?:User|Profile|Token|Account)", "category": "orm-schema", "description": "TypeORM entity definition"},
+      {"pattern": "mongoose\\.(?:Schema|model).*(?:user|profile|token)", "category": "orm-schema", "description": "Mongoose schema definition"},
+      {"pattern": "(?:INSERT|UPDATE).*(?:access_token|user_data|profile)", "category": "database-ops", "description": "Database write with user data"},
+      {"pattern": "(?:conversation|message|chat).*(?:history|log|store)", "category": "data-retention", "description": "Conversation storage"},
+      {"pattern": "(?:indefinite|permanent|forever|no.*expir)", "category": "data-retention", "description": "Indefinite storage indicator"},
+      {"pattern": "(?:encrypt|decrypt|hash).*(?:token|secret|password)", "category": "credentials", "description": "Credential encryption"},
+      {"pattern": "type\\s+(?:User|Profile|Account)\\s*(?:struct|=)", "category": "data-model", "description": "User type/struct definition"},
+      {"pattern": "interface\\s+(?:User|Profile|Account|Customer)", "category": "data-model", "description": "User interface definition"}
     ]
   }
 }

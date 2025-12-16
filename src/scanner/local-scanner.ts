@@ -16,6 +16,10 @@ import {
 const SCANNABLE_EXTENSIONS = [
   '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
   '.py', '.php', '.java', '.rb', '.go',
+  '.json',  // For package.json detection
+  '.sql',   // Database schemas
+  '.prisma', // Prisma ORM schemas
+  '.graphql', '.gql', // GraphQL schemas
 ];
 
 const DEFAULT_IGNORE_PATTERNS = [
